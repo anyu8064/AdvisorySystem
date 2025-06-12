@@ -17,28 +17,43 @@ export default function Login() {
     severity: 'success',
   })
 
-  const HandleLogin = async (e) => {
-    e.preventDefault();
-    if (!email || !password) {
-      setAlert({
-        open: true,
-        message: 'Please filled the required fields.',
-        severity: 'warning',
-      })
-      return;
-    }
-    let fullEmail = email.includes('@') ? email : `${email}@gmail.com`;
-    try {
-      await login(fullEmail, password);
-      console.log("User logged in Successfully.")
-    } catch (error) {
-      setAlert({
-        open: true,
-        message: 'Login Failed. Wrong password or username',
-        severity: 'error',
-      })
-    }
+useEffect(() => {
+  // Redirect immediately if already logged in
+  if (currentUser) {
+    Navigate('/dashboard');
   }
+}, [currentUser, Navigate]);
+
+const HandleLogin = async (e) => {
+  e.preventDefault();
+  if (!email || !password) {
+    setAlert({
+      open: true,
+      message: 'Please fill in the required fields.',
+      severity: 'warning',
+    });
+    return;
+  }
+  let fullEmail = email.includes('@') ? email : `${email}@gmail.com`;
+  try {
+    await login(fullEmail, password);
+    setAlert({
+      open: true,
+      message: 'Login Successful.',
+      severity: 'success',
+    });
+    setTimeout(() => {
+      Navigate('/dashboard');
+    }, 1000);
+  } catch (error) {
+    setAlert({
+      open: true,
+      message: 'Login Failed. Wrong password or username.',
+      severity: 'error',
+    });
+  }
+};
+
 
   const handleCloseAlert = () => {
     setAlert(prev => ({ ...prev, open: false }));

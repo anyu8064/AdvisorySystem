@@ -703,7 +703,7 @@ export default function Dashboard() {
                               InputLabelProps={{ shrink: true }}
                               value={entry.end.date}
                               onChange={(e) => handleDateTimeChange(index, 'end', 'date', e.target.value)}
-                              disabled={!entry.start.date || !entry.start.time }
+                              disabled={!entry.start.date || !entry.start.time}
                               inputProps={{
                                 min: entry.start.date || undefined,
                               }}
@@ -716,7 +716,7 @@ export default function Dashboard() {
                               value={entry.end.time}
                               onChange={(e) => handleDateTimeChange(index, 'end', 'time', e.target.value)}
                               sx={{ ml: 2 }}
-                              disabled={!entry.start.date || !entry.start.time || unscheduled}
+                              disabled={!entry.start.date || !entry.start.time}
                               inputProps={{
                                 min:
                                   entry.end.date === entry.start.date && entry.start.time

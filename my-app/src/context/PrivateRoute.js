@@ -1,5 +1,10 @@
+// src/context/PrivateRoute.js
+import React from 'react';
 import { Navigate } from 'react-router-dom';
+import { useAuth } from './AuthContext';
 
-export const ProtectedRoute = ({children, user}) => {
-  return user ? children : <Navigate to={'/'}></Navigate>
+export default function PrivateRoute({ children }) {
+  const { currentUser } = useAuth();
+
+  return currentUser ? children : <Navigate to="/" />;
 }
