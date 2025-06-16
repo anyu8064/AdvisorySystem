@@ -5,10 +5,14 @@ import { useNavigate } from 'react-router-dom';
 import Prompt from '../components/prompt';
 import HistoryModal from '../Modals/history';
 import DataModal from '../Modals/data';
-
-import { collection, getDocs } from "firebase/firestore";
+import Users from '../Modals/users';
+import ProfileModal from '../Modals/profile.js';
 import { db } from '../utils/firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+
 export default function Header({ title, fontSize = '1.5rem' }) {
+  const { currentUser } = useAuth();
+  const [profileData, setProfileData] = useState(null);
   const [anchorEl, setAnchorEl] = useState(null);
   const [alert, setAlert] = useState({ open: false, message: '', severity: 'success' });
   const [openHistory, setOpenHistory] = useState(false);
@@ -104,6 +108,56 @@ export default function Header({ title, fontSize = '1.5rem' }) {
   const handledataOpen = () => setOpendataModal(true);
   const handledataClose = () => setOpendataModal(false);
 
+  const [openUsersModal, setOpenUsersModal] = useState(false);
+
+  const handleOpenUsersModal = () => setOpenUsersModal(true);
+  const handleCloseUsersModal = () => setOpenUsersModal(false);
+
+  const [openProfile, setOpenProfile] = useState(false);
+
+const fetchUserByEmail = async (email) => {
+  const q = query(collection(db, 'users'), where('email', '==', email));
+  const snapshot = await getDocs(q);
+  if (!snapshot.empty) {
+    return snapshot.docs[0].data();
+  } else {
+    throw new Error('No matching user document found');
+  }
+};
+
+const handleOpenProfile = async () => {
+  try {
+    if (currentUser?.email) {
+      const data = await fetchUserByEmail(currentUser.email);
+      setProfileData(data);
+      setOpenProfile(true);
+    } else {
+      console.error('No currentUser email found.');
+    }
+  } catch (error) {
+    console.error('Failed to fetch profile data:', error);
+  }
+};
+
+
+  const handleCloseProfile = () => setOpenProfile(false);
+
+useEffect(() => {
+  const fetchUserData = async () => {
+    try {
+      const data = await fetchUserByEmail(currentUser.email);
+      setProfileData(data);
+    } catch (error) {
+      console.error('Failed to fetch profile data:', error);
+    }
+  };
+
+  if (currentUser?.email) {
+    fetchUserData();
+  }
+}, [currentUser]);
+
+
   return (
     <AppBar position="fixed" sx={{ width: '100%', backgroundColor: '#1976d2' }}>
       <Toolbar sx={{ minHeight: { xs: 56, sm: 64, md: 72 }, px: 2 }}>
@@ -129,11 +183,16 @@ export default function Header({ title, fontSize = '1.5rem' }) {
           transformOrigin={{ horizontal: 'right', vertical: 'top' }}
           anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
         >
-          <MenuItem onClick={handledataOpen}>System Variables</MenuItem>
+          <MenuItem onClick={handleOpenProfile}>Profile</MenuItem>
           <MenuItem onClick={handleOpenHistory}>History</MenuItem>
+          <MenuItem onClick={handleOpenUsersModal}>Manage Users</MenuItem>
+          <MenuItem onClick={handledataOpen}>System Variables</MenuItem>
           <MenuItem onClick={handleLogout}>Logout</MenuItem>
         </Menu>
 
+        {profileData && <ProfileModal open={openProfile} onClose={handleCloseProfile} user={profileData} />}
+
+        <Users open={openUsersModal} handleClose={handleCloseUsersModal} />
         <DataModal open={opendataModal} handleClose={handledataClose} />
         <HistoryModal
           open={openHistory}

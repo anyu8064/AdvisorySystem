@@ -528,24 +528,33 @@ export default function Dashboard() {
   useEffect(() => {
     console.log('Trigger:', { selectedType, selectedStatus, selectedIssue });
   }, [selectedType, selectedStatus, selectedIssue]);
+  const [outputText, setOutputText] = useState('');
+  const [isEdited, setIsEdited] = useState(false);
 
-  const computedOutput =
-    selectedType?.name?.toLowerCase() === 'system restored' &&
-      selectedStatus?.id?.toLowerCase() === 'finished' &&
-      typeof selectedIssue?.name === 'string'
-      ? selectedIssue.name.toLowerCase().includes('degradation')
-        ? `${selectedIssue.name} - Resolved`
-        : selectedIssue.name.toLowerCase().includes('maintenance') ||
-          selectedIssue.name.toLowerCase().includes('emergency maintenance')
-          ? `${selectedIssue.name} - Completed`
-          : selectedIssue.name.toLowerCase().includes('network') ||
-            selectedIssue.name.toLowerCase().includes('wi-fi') ||
-            selectedIssue.name.toLowerCase().includes('internet') ||
-            selectedIssue.name.toLowerCase().includes('connectivity') ||
-            selectedIssue.name.toLowerCase().includes('power fluctuation')
-            ? `${selectedIssue.name} - Restored`
-            : selectedIssue.name
-      : selectedIssue?.name || '';
+  // Compute the default output only if not manually edited
+  useEffect(() => {
+    if (!isEdited) {
+      const computed =
+        selectedType?.name?.toLowerCase() === 'system restored' &&
+          selectedStatus?.id?.toLowerCase() === 'finished' &&
+          typeof selectedIssue?.name === 'string'
+          ? selectedIssue.name.toLowerCase().includes('degradation')
+            ? `${selectedIssue.name} - Resolved`
+            : selectedIssue.name.toLowerCase().includes('maintenance') ||
+              selectedIssue.name.toLowerCase().includes('emergency maintenance')
+              ? `${selectedIssue.name} - Completed`
+              : selectedIssue.name.toLowerCase().includes('network') ||
+                selectedIssue.name.toLowerCase().includes('wi-fi') ||
+                selectedIssue.name.toLowerCase().includes('internet') ||
+                selectedIssue.name.toLowerCase().includes('connectivity') ||
+                selectedIssue.name.toLowerCase().includes('power fluctuation')
+                ? `${selectedIssue.name} - Restored`
+                : selectedIssue.name
+          : selectedIssue?.name || '';
+
+      setOutputText(computed);
+    }
+  }, [selectedType, selectedStatus, selectedIssue, isEdited]);
 
 
   return (
@@ -639,7 +648,11 @@ export default function Dashboard() {
                       label="Output"
                       sx={{ width: '48%' }}
                       size="small"
-                      value={computedOutput}
+                      value={outputText}
+                      onChange={(e) => {
+                        setOutputText(e.target.value);
+                        setIsEdited(true);
+                      }}
                     />
 
                   </Box>
@@ -874,9 +887,9 @@ export default function Dashboard() {
             overflowX: 'hidden',
           }}
         >
-      <Portal>
-        <Loading open={loading} />
-      </Portal>
+          <Portal>
+            <Loading open={loading} />
+          </Portal>
           <Box sx={{ mb: 2, display: 'flex', justifyContent: 'center', gap: 4 }}>
 
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -989,7 +1002,7 @@ export default function Dashboard() {
                   {/* What - Full Row */}
                   <Grid item sx={{ borderBottom: '2px solid', borderColor: '#002f6c', p: 1, width: '100%' }}>
                     <Typography variant="subtitle2" sx={{ p: 1, fontWeight: "bold", fontFamily: 'sans-serif' }} >What</Typography>
-                    <Typography variant="subtitle2" sx={{ p: 1, fontWeight: 400, fontFamily: 'sans-serif' }}>{computedOutput || '-- -- --'}</Typography>
+                    <Typography variant="subtitle2" sx={{ p: 1, fontWeight: 400, fontFamily: 'sans-serif' }}>{outputText || '-- -- --'}</Typography>
                   </Grid>
 
                   {/* When & Duration - Side by Side */}
