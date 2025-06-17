@@ -126,83 +126,128 @@ export default function Dashboard() {
     },
   });
   const handleGenerateImage = async () => {
-   
-    try {
-      const docRef = await saveForm();
+  setLoading(true);
+  try {
+    const docRef = await saveForm();
 
-      const canvas = await html2canvas(cardRef.current);
-      const imageData = canvas.toDataURL('image/png');
+    await document.fonts.ready;
+    await new Promise(resolve => setTimeout(resolve, 300));
 
-      const storage = getStorage();
-      const storageRef = ref(storage, `formImages/${docRef.id}.png`);
-      await uploadString(storageRef, imageData, 'data_url');
+    // Wait for all images inside cardRef to load
+    const images = cardRef.current.querySelectorAll('img');
+    await Promise.all(
+      Array.from(images).map(img =>
+        img.complete
+          ? Promise.resolve()
+          : new Promise(resolve => {
+              img.onload = resolve;
+              img.onerror = resolve;
+            })
+      )
+    );
 
-      const imageUrl = await getDownloadURL(storageRef);
-      await updateDoc(docRef, { imageUrl });
+    // Force white background to avoid dark areas
+    cardRef.current.style.backgroundColor = '#ffffff';
 
-      const link = document.createElement('a');
-      link.download = 'IT_Advisory.png';
-      link.href = imageData;
-      link.click();
+    const canvas = await html2canvas(cardRef.current, {
+      backgroundColor: '#ffffff',
+      useCORS: true,
+    });
 
-      setPromptMessage("Form and image saved successfully!");
-      setPromptSeverity('success');
-      setPromptOpen(true);
-    } catch (error) {
-      console.error("Error saving form or generating image:", error);
-      setPromptMessage("Error saving form or generating image.");
-      setPromptSeverity('error');
-      setPromptOpen(true);
-    } finally {
-      setLoading(false);
-    }
-  };
+    const imageData = canvas.toDataURL('image/png');
+
+    const storage = getStorage();
+    const storageRef = ref(storage, `formImages/${docRef.id}.png`);
+    await uploadString(storageRef, imageData, 'data_url');
+
+    const imageUrl = await getDownloadURL(storageRef);
+    await updateDoc(docRef, { imageUrl });
+
+    // Trigger download
+    const link = document.createElement('a');
+    link.download = 'IT_Advisory.png';
+    link.href = imageData;
+    link.click();
+
+    setPromptMessage("Form and image saved successfully!");
+    setPromptSeverity('success');
+    setPromptOpen(true);
+  } catch (error) {
+    console.error("Error saving form or generating image:", error);
+    setPromptMessage("Error saving form or generating image.");
+    setPromptSeverity('error');
+    setPromptOpen(true);
+  } finally {
+    setLoading(false);
+  }
+};
 
 
   const handleGeneratePDF = async () => {
-    
-    try {
-      const docRef = await saveForm();
+  setLoading(true);
+  try {
+    const docRef = await saveForm();
 
-      await document.fonts.ready;
-      await new Promise(resolve => setTimeout(resolve, 300));
+    await document.fonts.ready;
+    await new Promise(resolve => setTimeout(resolve, 300));
 
-      const canvas = await html2canvas(cardRef.current);
-      const imageData = canvas.toDataURL('image/png');
-      const imgWidth = canvas.width;
-      const imgHeight = canvas.height;
+    // Wait for all images inside cardRef to load
+    const images = cardRef.current.querySelectorAll('img');
+    await Promise.all(
+      Array.from(images).map(img =>
+        img.complete
+          ? Promise.resolve()
+          : new Promise(resolve => {
+              img.onload = resolve;
+              img.onerror = resolve;
+            })
+      )
+    );
 
-      const pdf = new jsPDF({
-        orientation: imgWidth > imgHeight ? 'landscape' : 'portrait',
-        unit: 'pt',
-        format: [imgWidth * 0.75, imgHeight * 0.75],
-      });
+    // Force white background to avoid dark areas
+    cardRef.current.style.backgroundColor = '#ffffff';
 
-      pdf.addImage(imageData, 'PNG', 0, 0, imgWidth * 0.75, imgHeight * 0.75);
+    const canvas = await html2canvas(cardRef.current, {
+      backgroundColor: '#ffffff',
+      useCORS: true,
+    });
 
-      const pdfBlob = pdf.output('blob');
+    const imageData = canvas.toDataURL('image/png');
+    const imgWidth = canvas.width;
+    const imgHeight = canvas.height;
 
-      const storage = getStorage();
-      const pdfRef = ref(storage, `formPDFs/${docRef.id}.pdf`);
-      await uploadBytes(pdfRef, pdfBlob);
+    const pdf = new jsPDF({
+      orientation: imgWidth > imgHeight ? 'landscape' : 'portrait',
+      unit: 'pt',
+      format: [imgWidth * 0.75, imgHeight * 0.75],
+    });
 
-      const pdfUrl = await getDownloadURL(pdfRef);
-      await updateDoc(docRef, { pdfUrl });
+    pdf.addImage(imageData, 'PNG', 0, 0, imgWidth * 0.75, imgHeight * 0.75);
 
-      pdf.save('IT-Advisory.pdf');
+    const pdfBlob = pdf.output('blob');
 
-      setPromptMessage("Form and PDF saved successfully!");
-      setPromptSeverity('success');
-      setPromptOpen(true);
-    } catch (error) {
-      console.error("Error generating PDF from image:", error);
-      setPromptMessage("Error generating PDF from image.");
-      setPromptSeverity('error');
-      setPromptOpen(true);
-    } finally {
-      setLoading(false);
-    }
-  };
+    const storage = getStorage();
+    const pdfRef = ref(storage, `formPDFs/${docRef.id}.pdf`);
+    await uploadBytes(pdfRef, pdfBlob);
+
+    const pdfUrl = await getDownloadURL(pdfRef);
+    await updateDoc(docRef, { pdfUrl });
+
+    pdf.save('IT-Advisory.pdf');
+
+    setPromptMessage("Form and PDF saved successfully!");
+    setPromptSeverity('success');
+    setPromptOpen(true);
+  } catch (error) {
+    console.error("Error generating PDF from image:", error);
+    setPromptMessage("Error generating PDF from image.");
+    setPromptSeverity('error');
+    setPromptOpen(true);
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   const handleCopyImage = async () => {
     try {
