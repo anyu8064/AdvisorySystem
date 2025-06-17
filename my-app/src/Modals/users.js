@@ -18,14 +18,17 @@ import ConfirmDialog from '../components/ConfirmDialog'; // New confirm dialog
 
 
 export default function Users({ open, handleClose }) {
-   const { currentUser } = useAuth();
-   console.log(currentUser);
+  const { currentUser } = useAuth();
+  console.log(currentUser);
   const [confirmPrompt, setConfirmPrompt] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
 
   const showSnackbar = (message, severity = 'info') => {
     setSnackbar({ open: true, message, severity });
   };
+  const [archivePrompt, setArchivePrompt] = useState(false);
+  const [userToArchive, setUserToArchive] = useState(null);
+  const [showArchiveModal, setShowArchiveModal] = useState(false);
   const [pendingUser, setPendingUser] = useState(null);
   const [pendingUserLevel, setPendingUserLevel] = useState('');
   const [users, setUsers] = useState([]);
@@ -35,8 +38,13 @@ export default function Users({ open, handleClose }) {
     name: '',
     email: '',
     position: '',
-    userLevel: ''
+    userLevel: '',
+    status: 'true'
   });
+  const confirmArchive = (user) => {
+    setUserToArchive(user);
+    setArchivePrompt(true);
+  };
 
   const fetchUsers = async () => {
     try {
@@ -45,7 +53,8 @@ export default function Users({ open, handleClose }) {
         id: doc.id,
         ...doc.data()
       }));
-      setUsers(userList);
+      setUsers(userList.filter(u => u.status !== false)); // default to active if undefined
+      setArchivedUsers(userList.filter(u => u.status === false));
       setEditRowId(null);
       setEditedUserLevel('');
     } catch (error) {
@@ -100,70 +109,148 @@ export default function Users({ open, handleClose }) {
     fetchUsers();
   };
 
-const handleSaveClick = (user) => {
-  // If no change in user level, skip confirmation and show cancelled message
-  if (user.userLevel === editedUserLevel) {
-    showSnackbar('Action cancelled', 'warning');
-    setEditRowId(null);
-    setEditedUserLevel('');
-    return;
-  }
+  const handleSaveClick = (user) => {
+    // If no change in user level, skip confirmation and show cancelled message
+    if (user.userLevel === editedUserLevel) {
+      showSnackbar('Action cancelled', 'warning');
+      setEditRowId(null);
+      setEditedUserLevel('');
+      return;
+    }
 
-  // If changed, show confirmation dialog
-  setPendingUser(user);
-  setPendingUserLevel(editedUserLevel);
-  setConfirmPrompt(true);
-};
+    // If changed, show confirmation dialog
+    setPendingUser(user);
+    setPendingUserLevel(editedUserLevel);
+    setConfirmPrompt(true);
+  };
 
+  const [archivedUsers, setArchivedUsers] = useState([]);
 
   const handleAddUserSubmit = async () => {
     const auth = getAuth();
+    const email = formData.email.trim().toLowerCase();
+    const username = formData.username.trim().toLowerCase();
     const password = formData.userLevel === 'admin' ? 'admin123' : 'user123';
 
     try {
-      // Step 1: Create auth user
-      const userCredential = await createUserWithEmailAndPassword(auth, formData.email, password);
-      const uid = userCredential.user.uid;
-
-      // Step 2: Generate user ID for Firestore
-      const newId = await generateNextUserId();
-
-      // Step 3: Store user details in Firestore
-      await setDoc(doc(db, "users", newId), {
-        ...formData,
-        uid,       // Save auth uid
-        id: newId  // Save generated user ID for traceability
+      // 🔍 Step 1: Check Firestore for existing username or email
+      const querySnapshot = await getDocs(collection(db, "users"));
+      const duplicate = querySnapshot.docs.find(doc => {
+        const data = doc.data();
+        return (
+          data.email.toLowerCase() === email ||
+          data.username.toLowerCase() === username
+        );
       });
 
-      // Step 4: Refresh UI
+      if (duplicate) {
+        const conflict = duplicate.data().email.toLowerCase() === email ? 'Username' : 'Email';
+        showSnackbar(`${conflict} already exists.`, 'error');
+        return;
+      }
+
+      // 🛡️ Step 2: Try to create user in Firebase Auth
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const uid = userCredential.user.uid;
+
+      // 🆔 Step 3: Generate unique Firestore ID
+      const newId = await generateNextUserId();
+
+      // 📝 Step 4: Save user data to Firestore
+      await setDoc(doc(db, "users", newId), {
+        ...formData,
+        email,
+        username,
+        uid,
+        id: newId,
+        status: true,
+      });
+
+      // ✅ Step 5: Cleanup
       fetchUsers();
       setOpenAddModal(false);
       setFormData({ username: '', name: '', email: '', position: '', userLevel: '' });
+      showSnackbar('User created successfully!', 'success');
     } catch (error) {
-      console.error("Error adding user:", error.message);
-      alert("Failed to add user: " + error.message);
+      if (error.code === 'auth/email-already-in-use') {
+        showSnackbar('Email already exists in Firebase Auth.', 'error');
+      } else {
+        console.error("Error adding user:", error.message);
+        showSnackbar('Failed to add user: ' + error.message, 'error');
+      }
     }
+  };
+
+  const archiveUser = async (user) => {
+    try {
+      await updateDoc(doc(db, "users", user.id), {
+        status: false
+      });
+      showSnackbar(`${user.name} archived successfully.`, 'success');
+      fetchUsers();
+    } catch (error) {
+      showSnackbar('Failed to archive user: ' + error.message, 'error');
+    }
+  };
+
+  const restoreUser = async (user) => {
+    try {
+      await updateDoc(doc(db, "users", user.id), {
+        status: true
+      });
+      showSnackbar(`${user.name} restored successfully.`, 'success');
+      fetchUsers();
+    } catch (error) {
+      showSnackbar('Failed to restore user: ' + error.message, 'error');
+    }
+  };
+
+  const handleArchiveConfirm = async (confirmed) => {
+    if (confirmed && userToArchive) {
+      try {
+        await updateDoc(doc(db, "users", userToArchive.id), {
+          status: false
+        });
+        showSnackbar(`${userToArchive.name} has been archived.`, 'success');
+      } catch (error) {
+        showSnackbar(`Failed to archive user: ${error.message}`, 'error');
+      }
+    } else {
+      showSnackbar('Action cancelled', 'warning');
+    }
+
+    setArchivePrompt(false);
+    setUserToArchive(null);
+    fetchUsers();
   };
 
   return (
     <>
-    <Portal>
-      <Prompt
-        open={snackbar.open}
-        message={snackbar.message}
-        severity={snackbar.severity}
-        onClose={() => setSnackbar({ ...snackbar, open: false })}
-      />
+      <Portal>
+        <Prompt
+          open={snackbar.open}
+          message={snackbar.message}
+          severity={snackbar.severity}
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+        />
 
-      <ConfirmDialog
-        open={confirmPrompt}
-        title="Confirm Change"
-        content={`Are you sure you want to change the user level of ${pendingUser?.name}?`}
-        onClose={handleConfirm}
-      />
+        <ConfirmDialog
+          open={confirmPrompt}
+          title="Confirm Change"
+          content={`Are you sure you want to change the user level of ${pendingUser?.name}?`}
+          onClose={handleConfirm}
+        />
 
-    </Portal>
-      
+        <ConfirmDialog
+          open={archivePrompt}
+          title="Confirm Archive"
+          content={`Are you sure you want to archive the account of ${userToArchive?.name}?`}
+          onClose={handleArchiveConfirm}
+        />
+
+
+      </Portal>
+
 
       {/* Main User Management Modal */}
       <Dialog open={open} onClose={handleClose} fullWidth maxWidth="md">
@@ -171,10 +258,16 @@ const handleSaveClick = (user) => {
         <DialogContent>
           <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
             <Typography variant="h6">User List</Typography>
-            <Button variant="contained" onClick={() => setOpenAddModal(true)}>
-              Add User
-            </Button>
+            <Box>
+              <Button variant="outlined" onClick={() => setShowArchiveModal(true)} sx={{ mr: 1 }}>
+                View Archives
+              </Button>
+              <Button variant="contained" onClick={() => setOpenAddModal(true)}>
+                Add User
+              </Button>
+            </Box>
           </Box>
+
           <Table>
             <TableHead>
               <TableRow>
@@ -218,9 +311,11 @@ const handleSaveClick = (user) => {
                         <IconButton color="primary" onClick={() => handleEditClick(user)}>
                           <Edit />
                         </IconButton>
-                        <IconButton color="error" onClick={() => alert(`Archive ${user.name}`)}>
+                        <IconButton color="error" onClick={() => confirmArchive(user)}>
                           <Archive />
                         </IconButton>
+
+
                       </>
                     )}
                   </TableCell>
@@ -277,6 +372,44 @@ const handleSaveClick = (user) => {
         </DialogActions>
       </Dialog>
 
+      <Dialog open={showArchiveModal} onClose={() => setShowArchiveModal(false)} fullWidth maxWidth="md">
+        <DialogTitle>Archived Users</DialogTitle>
+        <DialogContent>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>User ID</TableCell>
+                <TableCell>Username</TableCell>
+                <TableCell>Name</TableCell>
+                <TableCell>Email</TableCell>
+                <TableCell>Position</TableCell>
+                <TableCell>User Level</TableCell>
+                <TableCell>Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {archivedUsers.map((user) => (
+                <TableRow key={user.id}>
+                  <TableCell>{user.id}</TableCell>
+                  <TableCell>{user.username}</TableCell>
+                  <TableCell>{user.name}</TableCell>
+                  <TableCell>{user.email}</TableCell>
+                  <TableCell>{user.position}</TableCell>
+                  <TableCell>{user.userLevel}</TableCell>
+                  <TableCell>
+                    <Button variant="outlined" color="primary" onClick={() => restoreUser(user)}>
+                      Restore
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowArchiveModal(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
 
     </>
   );

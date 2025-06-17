@@ -3,31 +3,21 @@ const admin = require("firebase-admin");
 
 admin.initializeApp();
 
-exports.createUser = functions.https.onCall(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
+exports.resetUserPassword = functions.https.onCall(async (data, context) => {
+  const { uid, newPassword } = data;
+
+  if (!uid || !newPassword) {
+    throw new functions.https.HttpsError("invalid-argument", "UID and newPassword are required.");
   }
 
-  const { email, name, username, position, userLevel } = data;
-  const password = userLevel === "admin" ? "admin123" : "user123";
-
   try {
-    const userRecord = await admin.auth().createUser({
-      email,
-      password,
-      displayName: name,
+    await admin.auth().updateUser(uid, {
+      password: newPassword,
     });
 
-    await admin.firestore().collection("users").doc(userRecord.uid).set({
-      email,
-      name,
-      username,
-      position,
-      userLevel,
-    });
-
-    return { message: "User created successfully" };
+    return { success: true, message: "Password updated successfully." };
   } catch (error) {
+    console.error("Password reset error:", error);
     throw new functions.https.HttpsError("internal", error.message);
   }
 });

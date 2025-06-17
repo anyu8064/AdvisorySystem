@@ -115,47 +115,47 @@ export default function Header({ title, fontSize = '1.5rem' }) {
 
   const [openProfile, setOpenProfile] = useState(false);
 
-const fetchUserByEmail = async (email) => {
-  const q = query(collection(db, 'users'), where('email', '==', email));
-  const snapshot = await getDocs(q);
-  if (!snapshot.empty) {
-    return snapshot.docs[0].data();
-  } else {
-    throw new Error('No matching user document found');
-  }
-};
-
-const handleOpenProfile = async () => {
-  try {
-    if (currentUser?.email) {
-      const data = await fetchUserByEmail(currentUser.email);
-      setProfileData(data);
-      setOpenProfile(true);
+  const fetchUserByEmail = async (email) => {
+    const q = query(collection(db, 'users'), where('email', '==', email));
+    const snapshot = await getDocs(q);
+    if (!snapshot.empty) {
+      return snapshot.docs[0].data();
     } else {
-      console.error('No currentUser email found.');
+      throw new Error('No matching user document found');
     }
-  } catch (error) {
-    console.error('Failed to fetch profile data:', error);
-  }
-};
+  };
 
-
-  const handleCloseProfile = () => setOpenProfile(false);
-
-useEffect(() => {
-  const fetchUserData = async () => {
+  const handleOpenProfile = async () => {
     try {
-      const data = await fetchUserByEmail(currentUser.email);
-      setProfileData(data);
+      if (currentUser?.email) {
+        const data = await fetchUserByEmail(currentUser.email);
+        setProfileData(data);
+        setOpenProfile(true);
+      } else {
+        console.error('No currentUser email found.');
+      }
     } catch (error) {
       console.error('Failed to fetch profile data:', error);
     }
   };
 
-  if (currentUser?.email) {
-    fetchUserData();
-  }
-}, [currentUser]);
+
+  const handleCloseProfile = () => setOpenProfile(false);
+
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        const data = await fetchUserByEmail(currentUser.email);
+        setProfileData(data);
+      } catch (error) {
+        console.error('Failed to fetch profile data:', error);
+      }
+    };
+
+    if (currentUser?.email) {
+      fetchUserData();
+    }
+  }, [currentUser]);
 
 
   return (
@@ -183,12 +183,26 @@ useEffect(() => {
           transformOrigin={{ horizontal: 'right', vertical: 'top' }}
           anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
         >
-          <MenuItem onClick={handleOpenProfile}>Profile</MenuItem>
-          <MenuItem onClick={handleOpenHistory}>History</MenuItem>
-          <MenuItem onClick={handleOpenUsersModal}>Manage Users</MenuItem>
-          <MenuItem onClick={handledataOpen}>System Variables</MenuItem>
+           {profileData?.userLevel === 'user' && (
+            <>
+              <MenuItem onClick={handleOpenProfile}>Profile</MenuItem>
+              <MenuItem onClick={handleOpenHistory}>History</MenuItem>
+            </>
+          )}
+
+          {/* Show only if userLevel is 'admin' */}
+          {profileData?.userLevel === 'admin' && (
+            <>
+              <MenuItem onClick={handleOpenProfile}>Profile</MenuItem>
+              <MenuItem onClick={handleOpenHistory}>History</MenuItem>
+              <MenuItem onClick={handleOpenUsersModal}>Manage Users</MenuItem>
+              <MenuItem onClick={handledataOpen}>System Variables</MenuItem>
+            </>
+          )}
+
           <MenuItem onClick={handleLogout}>Logout</MenuItem>
         </Menu>
+
 
         {profileData && <ProfileModal open={openProfile} onClose={handleCloseProfile} user={profileData} />}
 
