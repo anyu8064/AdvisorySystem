@@ -126,7 +126,7 @@ export default function Dashboard() {
     },
   });
   const handleGenerateImage = async () => {
-    setLoading(true);
+   
     try {
       const docRef = await saveForm();
 
@@ -160,7 +160,7 @@ export default function Dashboard() {
 
 
   const handleGeneratePDF = async () => {
-    setLoading(true);
+    
     try {
       const docRef = await saveForm();
 
