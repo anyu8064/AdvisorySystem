@@ -10,6 +10,7 @@ import Prompt from '../components/prompt';
 import Loading from '../components/Loading';
 import { useEffect } from 'react';
 import { db } from '../utils/firebase';
+import  '../style.css';
 import { getDocs, doc, getDoc, collection, setDoc, addDoc, updateDoc } from "firebase/firestore";
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
@@ -1069,14 +1070,14 @@ const handleCopyImage = async () => {
 
                   {/* What - Full Row */}
                   <Grid item sx={{ borderBottom: '2px solid', borderColor: '#002f6c', p: 1, width: '100%' }}>
-                    <Typography variant="subtitle2" sx={{ p: 1, fontWeight: "bold", fontFamily: 'sans-serif' }} >What</Typography>
-                    <Typography variant="subtitle2" sx={{ p: 1, fontWeight: 400, fontFamily: 'sans-serif' }}>{outputText || '-- -- --'}</Typography>
+                    <Typography variant="subtitle2" className="title" sx={{ p: 1, fontWeight: "bold", fontFamily: 'sans-serif' }} >What</Typography>
+                    <Typography variant="subtitle2" className="content"  sx={{ p: 1, fontWeight: 400, fontFamily: 'sans-serif' }}>{outputText || '-- -- --'}</Typography>
                   </Grid>
 
                   {/* When & Duration - Side by Side */}
                   <Grid item sx={{ borderRight: '2px solid', borderColor: '#002f6c', p: 1, width: '60%' }}>
-                    <Typography variant="body2" fontWeight="bold" sx={{ p: 1, fontFamily: 'sans-serif' }}>When</Typography>
-                    <Typography variant="body2" sx={{ p: 1, fontWeight: 400, fontFamily: 'sans-serif' }}>
+                    <Typography variant="body2" className="title" fontWeight="bold" sx={{ p: 1, fontFamily: 'sans-serif' }}>When</Typography>
+                    <Typography variant="body2"  className="content" sx={{ p: 1, fontWeight: 400, fontFamily: 'sans-serif' }}>
                       {dateTimes.map((entry, index) => {
                         const startDate = entry.start.date;
                         const startTime = entry.start.time;
@@ -1121,24 +1122,24 @@ const handleCopyImage = async () => {
 
 
                   <Grid item sx={{ p: 1, width: '40%' }}>
-                    <Typography variant="body2" fontWeight="bold" sx={{ p: 1, fontFamily: 'sans-serif' }}>
+                    <Typography variant="body2" className="title" fontWeight="bold" sx={{ p: 1, fontFamily: 'sans-serif' }}>
                       Duration
                     </Typography>
-                    <Typography variant="body2" sx={{ p: 1, whiteSpace: 'pre-line', fontWeight: 400, fontFamily: 'sans-serif' }}>
+                    <Typography variant="body2"  className="content" sx={{ p: 1, whiteSpace: 'pre-line', fontWeight: 400, fontFamily: 'sans-serif' }}>
                       {durationText && durationText.trim() !== '' ? durationText : '-- -- --'}
                     </Typography>
                   </Grid>
 
                   {/* Areas Affected - Full Row */}
                   <Grid item sx={{ borderTop: '2px solid', borderColor: '#002f6c', p: 1, width: '100%' }}>
-                    <Typography variant="body2" fontWeight="bold" sx={{ p: 1, fontFamily: 'sans-serif' }}>Areas Affected</Typography>
-                    <Typography variant="body2" sx={{ textAlign: 'Left', p: 2, fontWeight: 400, fontFamily: 'sans-serif' }}>{areas && areas.trim() !== '' ? areas : '-- -- --'}</Typography>
+                    <Typography variant="body2" className="title"fontWeight="bold" sx={{ p: 1, fontFamily: 'sans-serif' }}>Areas Affected</Typography>
+                    <Typography variant="body2"  className="content" sx={{ textAlign: 'Left', p: 2, fontWeight: 400, fontFamily: 'sans-serif' }}>{areas && areas.trim() !== '' ? areas : '-- -- --'}</Typography>
                   </Grid>
 
                   {/* Details - Full Row */}
                   <Grid sx={{ borderTop: '2px solid', borderColor: '#002f6c', p: 1, width: '100%' }}>
-                    <Typography variant="body2" fontWeight="bold" sx={{ p: 1, fontFamily: 'sans-serif' }}>Details</Typography>
-                    <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', textAlign: 'Left', p: 1, fontWeight: 400, mb: 1, fontFamily: 'sans-serif' }}>{details && details.trim() !== '' ? details : '-- -- --'}</Typography>
+                    <Typography variant="body2" className="title" fontWeight="bold" sx={{ p: 1, fontFamily: 'sans-serif' }}>Details</Typography>
+                    <Typography variant="body2"  className="content" sx={{ whiteSpace: 'pre-wrap', textAlign: 'Left', p: 1, fontWeight: 400, mb: 1, fontFamily: 'sans-serif' }}>{details && details.trim() !== '' ? details : '-- -- --'}</Typography>
                   </Grid>
 
                 </Grid>

@@ -339,7 +339,7 @@ console.log(user)
                                 Via Email
                             </Button>
 
-                            <Button
+                            <Button disabled
                                 variant={mode === 'security' ? 'contained' : 'outlined'}
                                 onClick={() => setMode('security')}
                                 sx={{
