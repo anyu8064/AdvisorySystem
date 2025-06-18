@@ -126,6 +126,7 @@ export default function Dashboard() {
       fontFamily: 'sans-serif',
     },
   });
+
   const handleGenerateImage = async () => {
   setLoading(true);
   try {
@@ -148,7 +149,6 @@ export default function Dashboard() {
     );
 
     // Force reflow and repaint before capturing
-  
     await new Promise(resolve => requestAnimationFrame(resolve));
 
     // Fix style issues for rendering
@@ -156,7 +156,7 @@ export default function Dashboard() {
     cardRef.current.style.overflow = 'visible';
     cardRef.current.style.boxShadow = 'none';
 
-    // Generate canvas
+    // Generate canvas for image
     const canvas = await html2canvas(cardRef.current, {
       backgroundColor: '#ffffff',
       useCORS: true,
@@ -167,11 +167,24 @@ export default function Dashboard() {
 
     const imageData = canvas.toDataURL('image/png');
 
-    const storage = getStorage();
-    const storageRef = ref(storage, `formImages/${docRef.id}.png`);
-    await uploadString(storageRef, imageData, 'data_url');
+    // Check if imageData is valid
+    if (!imageData) {
+      throw new Error("Failed to generate image data.");
+    }
 
-    const imageUrl = await getDownloadURL(storageRef);
+    const storage = getStorage();
+    const imageRef = ref(storage, `formImages/${docRef.id}.png`);
+
+    // Upload image
+    await uploadString(imageRef, imageData, 'data_url');
+
+    // Log success of upload
+    console.log("Image uploaded successfully:", imageRef.fullPath);
+
+    // Get the download URL for the uploaded image
+    const imageUrl = await getDownloadURL(imageRef);
+
+    // Update Firestore document with imageUrl
     await updateDoc(docRef, { imageUrl });
 
     // Download image
@@ -180,7 +193,37 @@ export default function Dashboard() {
     link.href = imageData;
     link.click();
 
-    setPromptMessage("Form and image saved successfully!");
+    // Now also generate and upload PDF silently (no download)
+    {
+      // Reuse same cardRef with html2canvas - but for PDF it's better scale 3 for resolution
+      const pdfCanvas = await html2canvas(cardRef.current, {
+        backgroundColor: '#ffffff',
+        useCORS: true,
+        scale: 3,
+      });
+
+      const pdfImageData = pdfCanvas.toDataURL('image/png');
+      const imgWidth = pdfCanvas.width;
+      const imgHeight = pdfCanvas.height;
+      const pdfWidth = (imgWidth * 72) / 96;
+      const pdfHeight = (imgHeight * 72) / 96;
+      const pdf = new jsPDF({
+        orientation: pdfWidth > pdfHeight ? 'landscape' : 'portrait',
+        unit: 'pt',
+        format: [pdfWidth, pdfHeight],
+      });
+      pdf.addImage(pdfImageData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      const pdfBlob = pdf.output('blob');
+
+      const pdfRef = ref(storage, `formPDFs/${docRef.id}.pdf`);
+      await uploadBytes(pdfRef, pdfBlob);
+
+      // Update doc with pdfUrl
+      const pdfUrl = await getDownloadURL(pdfRef);
+      await updateDoc(docRef, { pdfUrl });
+    }
+
+    setPromptMessage("Form and image saved successfully! PDF also uploaded.");
     setPromptSeverity('success');
     setPromptOpen(true);
   } catch (error) {
@@ -192,6 +235,8 @@ export default function Dashboard() {
     setLoading(false);
   }
 };
+
+
 
 const handleGeneratePDF = async () => {
   setLoading(true);
@@ -214,50 +259,70 @@ const handleGeneratePDF = async () => {
       )
     );
 
-    // Force reflow
+    // Wait for reflow
     await new Promise(resolve => requestAnimationFrame(resolve));
 
-    // Apply styles to improve canvas rendering
+    // Fix style issues for rendering
     cardRef.current.style.backgroundColor = '#ffffff';
     cardRef.current.style.overflow = 'visible';
     cardRef.current.style.boxShadow = 'none';
 
-    // Create canvas
+    // Capture as high-res canvas for PDF
     const canvas = await html2canvas(cardRef.current, {
       backgroundColor: '#ffffff',
       useCORS: true,
-      scale: 2,
-      removeContainer: true,
-      logging: false,
+      scale: 3,
     });
 
     const imageData = canvas.toDataURL('image/png');
     const imgWidth = canvas.width;
     const imgHeight = canvas.height;
 
-    // Create A4 PDF and scale image properly
-    const pdf = new jsPDF('p', 'pt', 'a4');
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
+    const pdfWidth = (imgWidth * 72) / 96;
+    const pdfHeight = (imgHeight * 72) / 96;
 
-    const scaleRatio = Math.min(pageWidth / imgWidth, pageHeight / imgHeight);
-    const x = (pageWidth - imgWidth * scaleRatio) / 2;
-    const y = (pageHeight - imgHeight * scaleRatio) / 2;
+    const pdf = new jsPDF({
+      orientation: pdfWidth > pdfHeight ? 'landscape' : 'portrait',
+      unit: 'pt',
+      format: [pdfWidth, pdfHeight],
+    });
 
-    pdf.addImage(imageData, 'PNG', x, y, imgWidth * scaleRatio, imgHeight * scaleRatio);
-
+    pdf.addImage(imageData, 'PNG', 0, 0, pdfWidth, pdfHeight);
     const pdfBlob = pdf.output('blob');
 
     const storage = getStorage();
     const pdfRef = ref(storage, `formPDFs/${docRef.id}.pdf`);
+    // Upload PDF
     await uploadBytes(pdfRef, pdfBlob);
 
+    // Download PDF
+    pdf.save('IT-Advisory.pdf');
+
+    // Update doc with pdfUrl
     const pdfUrl = await getDownloadURL(pdfRef);
     await updateDoc(docRef, { pdfUrl });
 
-    pdf.save('IT-Advisory.pdf');
+    // Now also generate and upload image silently (no download)
+    {
+      // Generate canvas for image (scale 2 is good)
+      const imgCanvas = await html2canvas(cardRef.current, {
+        backgroundColor: '#ffffff',
+        useCORS: true,
+        scale: 2,
+        removeContainer: true,
+        logging: false,
+      });
 
-    setPromptMessage("Form and PDF saved successfully!");
+      const imgData = imgCanvas.toDataURL('image/png');
+      const imageRef = ref(storage, `formImages/${docRef.id}.png`);
+      await uploadString(imageRef, imgData, 'data_url');
+
+      // Update doc with imageUrl
+      const imageUrl = await getDownloadURL(imageRef);
+      await updateDoc(docRef, { imageUrl });
+    }
+
+    setPromptMessage("Form and PDF saved successfully! Image also uploaded.");
     setPromptSeverity('success');
     setPromptOpen(true);
   } catch (error) {
@@ -269,6 +334,7 @@ const handleGeneratePDF = async () => {
     setLoading(false);
   }
 };
+
 
 const handleCopyImage = async () => {
   try {
@@ -993,9 +1059,9 @@ const handleCopyImage = async () => {
               </IconButton>
             </Box>
 
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <Typography sx={{ fontWeight: 'bold' }}>Generate Word</Typography>
-              <IconButton
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center'}}>
+              <Typography  sx={{ fontWeight: 'bold' }}>Generate Word</Typography>
+              <IconButton  disabled
                 color="primary"
                 onClick={handleGenerateWord}
                 size="large"
@@ -1070,14 +1136,14 @@ const handleCopyImage = async () => {
 
                   {/* What - Full Row */}
                   <Grid item sx={{ borderBottom: '2px solid', borderColor: '#002f6c', p: 1, width: '100%' }}>
-                    <Typography variant="subtitle2" className="title" sx={{ p: 1, fontWeight: "bold", fontFamily: 'sans-serif' }} >What</Typography>
-                    <Typography variant="subtitle2" className="content"  sx={{ p: 1, fontWeight: 400, fontFamily: 'sans-serif' }}>{outputText || '-- -- --'}</Typography>
+                    <Typography variant="subtitle2" className="title" sx={{ p: 1 }} >What</Typography>
+                    <Typography variant="subtitle2" className="content"  sx={{ p: 1 }}>{outputText || '-- -- --'}</Typography>
                   </Grid>
 
                   {/* When & Duration - Side by Side */}
                   <Grid item sx={{ borderRight: '2px solid', borderColor: '#002f6c', p: 1, width: '60%' }}>
-                    <Typography variant="body2" className="title" fontWeight="bold" sx={{ p: 1, fontFamily: 'sans-serif' }}>When</Typography>
-                    <Typography variant="body2"  className="content" sx={{ p: 1, fontWeight: 400, fontFamily: 'sans-serif' }}>
+                    <Typography variant="body2" className="title" sx={{ p: 1, }}>When</Typography>
+                    <Typography variant="subtitle2"  className="content" sx={{ p: 1 }}>
                       {dateTimes.map((entry, index) => {
                         const startDate = entry.start.date;
                         const startTime = entry.start.time;
@@ -1122,24 +1188,24 @@ const handleCopyImage = async () => {
 
 
                   <Grid item sx={{ p: 1, width: '40%' }}>
-                    <Typography variant="body2" className="title" fontWeight="bold" sx={{ p: 1, fontFamily: 'sans-serif' }}>
+                    <Typography variant="body2" className="title"  sx={{ p: 1 }}>
                       Duration
                     </Typography>
-                    <Typography variant="body2"  className="content" sx={{ p: 1, whiteSpace: 'pre-line', fontWeight: 400, fontFamily: 'sans-serif' }}>
+                    <Typography variant="subtitle2"  className="content" sx={{ p: 1, whiteSpace: 'pre-line' }}>
                       {durationText && durationText.trim() !== '' ? durationText : '-- -- --'}
                     </Typography>
                   </Grid>
 
                   {/* Areas Affected - Full Row */}
                   <Grid item sx={{ borderTop: '2px solid', borderColor: '#002f6c', p: 1, width: '100%' }}>
-                    <Typography variant="body2" className="title"fontWeight="bold" sx={{ p: 1, fontFamily: 'sans-serif' }}>Areas Affected</Typography>
-                    <Typography variant="body2"  className="content" sx={{ textAlign: 'Left', p: 2, fontWeight: 400, fontFamily: 'sans-serif' }}>{areas && areas.trim() !== '' ? areas : '-- -- --'}</Typography>
+                    <Typography variant="body2" className="title" sx={{ p: 1}}>Areas Affected</Typography>
+                    <Typography variant="subtitle2"  className="content" sx={{ textAlign: 'Left', p: 2}}>{areas && areas.trim() !== '' ? areas : '-- -- --'}</Typography>
                   </Grid>
 
                   {/* Details - Full Row */}
                   <Grid sx={{ borderTop: '2px solid', borderColor: '#002f6c', p: 1, width: '100%' }}>
-                    <Typography variant="body2" className="title" fontWeight="bold" sx={{ p: 1, fontFamily: 'sans-serif' }}>Details</Typography>
-                    <Typography variant="body2"  className="content" sx={{ whiteSpace: 'pre-wrap', textAlign: 'Left', p: 1, fontWeight: 400, mb: 1, fontFamily: 'sans-serif' }}>{details && details.trim() !== '' ? details : '-- -- --'}</Typography>
+                    <Typography variant="body2" className="title" sx={{ p: 1 }}>Details</Typography>
+                    <Typography variant="subtitle2"  className="content" sx={{ whiteSpace: 'pre-wrap', textAlign: 'Left', p: 1, mb: 1}}>{details && details.trim() !== '' ? details : '-- -- --'}</Typography>
                   </Grid>
 
                 </Grid>

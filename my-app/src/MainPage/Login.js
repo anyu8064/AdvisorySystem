@@ -8,6 +8,8 @@ import { useNavigate } from 'react-router-dom';
 import { getFirestore, collection, query, where, getDocs } from 'firebase/firestore';
 
 export default function Login() {
+  const [loading, setLoading] = useState(false);
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const { login, currentUser } = useAuth();
@@ -20,6 +22,7 @@ export default function Login() {
 
   const HandleLogin = async (e) => {
     e.preventDefault();
+    setLoading(true); // START loading
 
     if (!email || !password) {
       setAlert({
@@ -27,11 +30,9 @@ export default function Login() {
         message: 'Please fill in the required fields.',
         severity: 'warning',
       });
+      setLoading(false); // STOP loading
       return;
     }
-
-    let loginEmail = email;
-    let userStatus = null;
 
     try {
       const isEmail = email.includes('@');
@@ -48,18 +49,14 @@ export default function Login() {
       }
 
       const userDoc = querySnapshot.docs[0].data();
-      loginEmail = userDoc.email;
-      userStatus = userDoc.status; // Assuming you have a field like "status: 'active'"
+      const loginEmail = userDoc.email;
+      const userStatus = userDoc.status;
 
-      if (!loginEmail) {
-        throw new Error('Email not found for that username.');
-      }
-
+      if (!loginEmail) throw new Error('Email not found for that username.');
       if (userStatus !== true && userStatus !== 'active') {
         throw new Error('Account is inactive. Please contact administrator.');
       }
 
-      // Proceed to Firebase Auth login
       await login(loginEmail, password);
 
       setAlert({
@@ -67,9 +64,10 @@ export default function Login() {
         message: 'Login Successful.',
         severity: 'success',
       });
+
       setTimeout(() => {
         Navigate('/dashboard');
-      }, 2000);
+      }, 1000);
     } catch (error) {
       console.error('Login Error:', error);
       setAlert({
@@ -77,13 +75,15 @@ export default function Login() {
         message: 'Login Failed. Wrong password or username.',
         severity: 'error',
       });
+    } finally {
+      setLoading(false); // STOP loading
     }
   };
 
   const handleCloseAlert = () => {
     setAlert(prev => ({ ...prev, open: false }));
   };
-    
+
   return (
     <Box
       sx={{
@@ -132,6 +132,8 @@ export default function Login() {
 
         {/* Login Form */}
         <Box
+          component="form"
+          onSubmit={HandleLogin}
           sx={{
             backgroundColor: 'rgba(71, 122, 216, 0.8)',
             borderRadius: '40px',
@@ -143,6 +145,7 @@ export default function Login() {
             boxShadow: 3,
           }}
         >
+
           <Typography variant="h4" sx={{ color: 'white', fontWeight: 'bold', mb: 4 }}>
             Login
           </Typography>
@@ -173,12 +176,15 @@ export default function Login() {
           </Link>
 
           <Button
+            type="submit" // ← This is important for Enter key to work
             variant="contained"
-            onClick={HandleLogin}
+            disabled={loading}
             sx={{ backgroundColor: '#1E40AF', borderRadius: 5, px: 5, py: 1.5, fontWeight: 'bold' }}
           >
-            Login
+            {loading ? 'Logging in...' : 'Login'}
           </Button>
+
+
         </Box>
       </Box>
     </Box>

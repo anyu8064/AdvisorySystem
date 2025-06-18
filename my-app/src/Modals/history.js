@@ -9,7 +9,6 @@ import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import dayjs from 'dayjs';
 
-
 export default function HistoryModal({ open, onClose, historyData = [] }) {
   const [selectedIndex, setSelectedIndex] = useState(null);
   const sortedHistory = [...historyData].sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -109,7 +108,8 @@ export default function HistoryModal({ open, onClose, historyData = [] }) {
         </>
       )}
 
-      {details.imageUrl && (
+      {/* Image Section */}
+      {details.imageUrl ? (
         <Box mt={2}>
           <Typography><strong>Image File:</strong></Typography>
 
@@ -134,9 +134,12 @@ export default function HistoryModal({ open, onClose, historyData = [] }) {
             Download Image
           </Button>
         </Box>
+      ) : (
+        <Typography mt={2} color="textSecondary">No image file available.</Typography>
       )}
 
-      {details.pdfUrl && (
+      {/* PDF Section */}
+      {details.pdfUrl ? (
         <Box mt={2}>
           <Typography><strong>PDF File:</strong></Typography>
           {/* View PDF */}
@@ -159,10 +162,12 @@ export default function HistoryModal({ open, onClose, historyData = [] }) {
             Download PDF
           </Button>
         </Box>
+      ) : (
+        <Typography mt={2} color="textSecondary">No PDF file available.</Typography>
       )}
-
     </Box>
   );
+
   const filteredHistory = sortedHistory.filter(filterHistory);
   return (
     <Dialog open={open} onClose={handleClose} fullWidth maxWidth="sm">
