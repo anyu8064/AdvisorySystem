@@ -146,12 +146,22 @@ export default function Dashboard() {
       )
     );
 
-    // Force white background to avoid dark areas
-    cardRef.current.style.backgroundColor = '#ffffff';
+    // Force reflow and repaint before capturing
+  
+    await new Promise(resolve => requestAnimationFrame(resolve));
 
+    // Fix style issues for rendering
+    cardRef.current.style.backgroundColor = '#ffffff';
+    cardRef.current.style.overflow = 'visible';
+    cardRef.current.style.boxShadow = 'none';
+
+    // Generate canvas
     const canvas = await html2canvas(cardRef.current, {
       backgroundColor: '#ffffff',
       useCORS: true,
+      scale: 2,
+      removeContainer: true,
+      logging: false,
     });
 
     const imageData = canvas.toDataURL('image/png');
@@ -163,7 +173,7 @@ export default function Dashboard() {
     const imageUrl = await getDownloadURL(storageRef);
     await updateDoc(docRef, { imageUrl });
 
-    // Trigger download
+    // Download image
     const link = document.createElement('a');
     link.download = 'IT_Advisory.png';
     link.href = imageData;
@@ -182,8 +192,7 @@ export default function Dashboard() {
   }
 };
 
-
-  const handleGeneratePDF = async () => {
+const handleGeneratePDF = async () => {
   setLoading(true);
   try {
     const docRef = await saveForm();
@@ -204,25 +213,37 @@ export default function Dashboard() {
       )
     );
 
-    // Force white background to avoid dark areas
-    cardRef.current.style.backgroundColor = '#ffffff';
+    // Force reflow
+    await new Promise(resolve => requestAnimationFrame(resolve));
 
+    // Apply styles to improve canvas rendering
+    cardRef.current.style.backgroundColor = '#ffffff';
+    cardRef.current.style.overflow = 'visible';
+    cardRef.current.style.boxShadow = 'none';
+
+    // Create canvas
     const canvas = await html2canvas(cardRef.current, {
       backgroundColor: '#ffffff',
       useCORS: true,
+      scale: 2,
+      removeContainer: true,
+      logging: false,
     });
 
     const imageData = canvas.toDataURL('image/png');
     const imgWidth = canvas.width;
     const imgHeight = canvas.height;
 
-    const pdf = new jsPDF({
-      orientation: imgWidth > imgHeight ? 'landscape' : 'portrait',
-      unit: 'pt',
-      format: [imgWidth * 0.75, imgHeight * 0.75],
-    });
+    // Create A4 PDF and scale image properly
+    const pdf = new jsPDF('p', 'pt', 'a4');
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
 
-    pdf.addImage(imageData, 'PNG', 0, 0, imgWidth * 0.75, imgHeight * 0.75);
+    const scaleRatio = Math.min(pageWidth / imgWidth, pageHeight / imgHeight);
+    const x = (pageWidth - imgWidth * scaleRatio) / 2;
+    const y = (pageHeight - imgHeight * scaleRatio) / 2;
+
+    pdf.addImage(imageData, 'PNG', x, y, imgWidth * scaleRatio, imgHeight * scaleRatio);
 
     const pdfBlob = pdf.output('blob');
 
@@ -248,40 +269,42 @@ export default function Dashboard() {
   }
 };
 
+const handleCopyImage = async () => {
+  try {
+    // Style fixes for rendering
+    cardRef.current.style.backgroundColor = '#ffffff';
+    cardRef.current.style.boxShadow = 'none';
+    cardRef.current.style.overflow = 'visible';
 
-  const handleCopyImage = async () => {
-    try {
-      const canvas = await html2canvas(cardRef.current);
+    const canvas = await html2canvas(cardRef.current, {
+      backgroundColor: '#ffffff',
+      scale: 2,
+      useCORS: true,
+    });
 
-      // Convert canvas to blob
-      canvas.toBlob(async (blob) => {
-        if (!blob) {
-          setPromptMessage("Failed to copy image.");
-          setPromptSeverity('error');
-          setPromptOpen(true);
-          return;
-        }
-
-        // Create a ClipboardItem with the image blob
-        const clipboardItem = new ClipboardItem({ 'image/png': blob });
-
-        // Use the Clipboard API to copy it
-        await navigator.clipboard.write([clipboardItem]);
-
-        // Prompt on success
-        setPromptMessage("Image copied to clipboard!");
-        setPromptSeverity('success');
+    canvas.toBlob(async (blob) => {
+      if (!blob) {
+        setPromptMessage("Failed to copy image.");
+        setPromptSeverity('error');
         setPromptOpen(true);
-      }, 'image/png');
-    } catch (error) {
-      console.error("Error copying image to clipboard:", error);
+        return;
+      }
 
-      // Prompt on error
-      setPromptMessage("Failed to copy image.");
-      setPromptSeverity('error');
+      const clipboardItem = new ClipboardItem({ 'image/png': blob });
+      await navigator.clipboard.write([clipboardItem]);
+
+      setPromptMessage("Image copied to clipboard!");
+      setPromptSeverity('success');
       setPromptOpen(true);
-    }
-  };
+    }, 'image/png');
+  } catch (error) {
+    console.error("Error copying image to clipboard:", error);
+    setPromptMessage("Failed to copy image.");
+    setPromptSeverity('error');
+    setPromptOpen(true);
+  }
+};
+
 
   useEffect(() => {
     const fetchScopes = async () => {
