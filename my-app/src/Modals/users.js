@@ -289,7 +289,9 @@ export default function Users({ open, handleClose }) {
                   <TableCell>{user.email}</TableCell>
                   <TableCell>{user.position}</TableCell>
                   <TableCell>
-                    {editRowId === user.id ? (
+                    {user.userLevel === 'superadmin' ? (
+                      user.userLevel
+                    ) : editRowId === user.id ? (
                       <Autocomplete
                         options={['user', 'admin']}
                         value={editedUserLevel}
@@ -301,8 +303,11 @@ export default function Users({ open, handleClose }) {
                       user.userLevel
                     )}
                   </TableCell>
+
                   <TableCell>
-                    {editRowId === user.id ? (
+                    {user.userLevel === 'superadmin' ? (
+                      <Typography variant="body2" color="textSecondary">Protected</Typography>
+                    ) : editRowId === user.id ? (
                       <IconButton color="success" onClick={() => handleSaveClick(user)}>
                         <Typography fontWeight="bold">Save</Typography>
                       </IconButton>
@@ -314,11 +319,10 @@ export default function Users({ open, handleClose }) {
                         <IconButton color="error" onClick={() => confirmArchive(user)}>
                           <Archive />
                         </IconButton>
-
-
                       </>
                     )}
                   </TableCell>
+
 
                 </TableRow>
               ))}

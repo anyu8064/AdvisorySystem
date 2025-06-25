@@ -195,6 +195,14 @@ export default function Header({ title, fontSize = '1.5rem' }) {
             <>
               <MenuItem onClick={handleOpenProfile}>Profile</MenuItem>
               <MenuItem onClick={handleOpenHistory}>History</MenuItem>
+              <MenuItem onClick={handledataOpen}>System Variables</MenuItem>
+            </>
+          )}
+
+            {profileData?.userLevel === 'superadmin' && (
+            <>
+              <MenuItem onClick={handleOpenProfile}>Profile</MenuItem>
+              <MenuItem onClick={handleOpenHistory}>History</MenuItem>
               <MenuItem onClick={handleOpenUsersModal}>Manage Users</MenuItem>
               <MenuItem onClick={handledataOpen}>System Variables</MenuItem>
             </>
