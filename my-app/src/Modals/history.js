@@ -10,6 +10,7 @@ import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import dayjs from 'dayjs';
 
 export default function HistoryModal({ open, onClose, historyData = [] }) {
+  const [selectedTemplate, setSelectedTemplate] = useState('Advisory'); // New state
   const [selectedIndex, setSelectedIndex] = useState(null);
   const sortedHistory = [...historyData].sort((a, b) => new Date(b.date) - new Date(a.date));
   const [searchQuery, setSearchQuery] = useState('');
@@ -31,6 +32,7 @@ export default function HistoryModal({ open, onClose, historyData = [] }) {
 
     const fieldsToSearch = [
       title,
+      fullDetails.name,
       fullDetails.scope,
       fullDetails.issue,
       fullDetails.output,
@@ -51,7 +53,9 @@ export default function HistoryModal({ open, onClose, historyData = [] }) {
   };
 
   const renderDetails = (details) => (
+
     <Box pl={2} pt={1}>
+      {details.name && <Typography><strong>User Generate:</strong> {details.name}</Typography>}
       {details.scope && <Typography><strong>Scope:</strong> {details.scope}</Typography>}
       {details.issue && <Typography><strong>Issue:</strong> {details.issue}</Typography>}
       {details.output && <Typography><strong>Output:</strong> {details.output}</Typography>}
@@ -144,7 +148,7 @@ export default function HistoryModal({ open, onClose, historyData = [] }) {
           <Typography><strong>PDF File:</strong></Typography>
           {/* View PDF */}
           <Button
-            href={`https://docs.google.com/gview?url=${encodeURIComponent(details.pdfUrl)}&embedded=true`}
+            href={details.pdfUrl} // Direct link to the PDF
             target="_blank"
             rel="noopener noreferrer"
             variant="outlined"
@@ -166,6 +170,7 @@ export default function HistoryModal({ open, onClose, historyData = [] }) {
         <Typography mt={2} color="textSecondary">No PDF file available.</Typography>
       )}
     </Box>
+
   );
 
   const filteredHistory = sortedHistory.filter(filterHistory);
@@ -174,6 +179,20 @@ export default function HistoryModal({ open, onClose, historyData = [] }) {
       <DialogTitle>History</DialogTitle>
 
       <DialogContent dividers>
+        <Box display="flex" justifyContent="center" gap={2} mb={2}>
+          <Button
+            variant={selectedTemplate === 'Advisory' ? 'contained' : 'outlined'}
+            onClick={() => setSelectedTemplate('Advisory')}
+          >
+            Advisory Template
+          </Button>
+          <Button
+            variant={selectedTemplate === 'Informational' ? 'contained' : 'outlined'}
+            onClick={() => setSelectedTemplate('Informational')}
+          >
+            Informational Template
+          </Button>
+        </Box>
         <Stack spacing={2} mb={2}>
           {/* Search Field */}
           <TextField

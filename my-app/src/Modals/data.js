@@ -30,7 +30,12 @@ const DataModal = ({ open, handleClose }) => {
     const [promptOpen, setPromptOpen] = useState(false);
     const [promptMessage, setPromptMessage] = useState('');
     const [promptSeverity, setPromptSeverity] = useState('info');
-
+    const [mode, setMode] = useState('update'); // 'update' or 'add'
+    const [newScope, setNewScope] = useState('');
+    const [newIssue, setNewIssue] = useState('');
+    const [newType, setNewType] = useState('');
+    const [isAddingScope, setIsAddingScope] = useState(false);
+    const [isAddingIssue, setIsAddingIssue] = useState(false);
 
     useEffect(() => {
         const fetchScopes = async () => {
@@ -122,123 +127,345 @@ const DataModal = ({ open, handleClose }) => {
         fetchDetails();
     }, [selectedScope, selectedIssue, selectedType]);
 
+    const clear = () => {
+        setSelectedScope(null);
+        setSelectedIssue(null);
+        setSelectedType(null);
+        setSelectedStatus(null);
+        setIssueOptions([]);
+        setDetails('');
+        setNewScope('');
+        setNewIssue('');
+        setNewType('');
+    };
+
     return (
-        <Modal open={open} onClose={handleClose}>
-            <Box sx={{
-                p: 3,
-                bgcolor: 'background.paper',
-                borderRadius: 2,
-                boxShadow: 24,
-                width: '60%',
-                height: '60%',
-                mx: 'auto',
-                mt: '10%',
-            }}>
+        <Modal open={open} onClose={() => {
+            clear();
+            handleClose();
+        }}>
+            <Box
+                sx={{
+                    p: 3,
+                    bgcolor: 'background.paper',
+                    borderRadius: 2,
+                    boxShadow: 24,
+                    width: '60%',
+                    maxHeight: '90vh',  // Use maxHeight instead of fixed height
+                    overflowY: 'auto',  // Enable vertical scroll when needed
+                    mx: 'auto',
+                    mt: '5%',           // Slightly closer to top for better layout
+                }}
+            >
+
                 <Table>
-                    <TableBody>
-                        <TableRow>
+                    <Typography
+                        variant="h6"
+                        align="center"
+                        fontWeight="bold"
+                        mb={2}
+                    >
+                        System Variables
+                    </Typography>
 
-                            <TableCell sx={{ width: '80%' }}>
-                                <Typography
-                                    variant="h6"
-                                    align="center"
-                                    fontWeight="bold"
-                                    mb={1}
-                                >
-                                    System Variables
-                                </Typography>
+                    <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+                        <Button
+                            variant={mode === 'update' ? 'contained' : 'outlined'}
+                            onClick={() => {
+                                clear();
+                                setMode('update');
+                            }}
+                        >
+                            Update Details
+                        </Button>
+                        <Button
+                            variant={mode === 'add' ? 'contained' : 'outlined'}
+                            onClick={() => {
+                                clear();
+                                setMode('add');
+                            }}
+                        >
+                            Add New
+                        </Button>
+                    </Box>
 
-                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                    <Box sx={{ display: 'flex', gap: 2 }}>
-                                        <Autocomplete
-                                            sx={{ width: '50%' }}
-                                            options={scopeOptions}
-                                            getOptionLabel={(option) => option?.name || ''}
-                                            value={selectedScope}
-                                            onChange={(e, newValue) => {
-                                                setSelectedScope(newValue);
-                                                setSelectedIssue(null);
-                                                setSelectedType(null);
-                                                setIssueOptions([]);
-                                                setDetails('');
-                                                setSelectedStatus(null);
-                                            }}
-                                            renderInput={(params) => (
-                                                <TextField {...params} label="Scope" size="small" />
-                                            )}
-                                        />
-                                        <Autocomplete
-                                            sx={{ width: '50%' }}
-                                            options={issueOptions}
-                                            value={selectedIssue}
-                                            getOptionLabel={(option) => typeof option === 'string' ? option : option?.name || ''}
-                                            isOptionEqualToValue={(option, value) => option?.name === value?.name}
-                                            onChange={(e, newValue) => setSelectedIssue(newValue)}
-                                            renderInput={(params) => (
-                                                <TextField {...params} label="Issue" size="small" />
-                                            )}
-                                        />
-                                    </Box>
+
+                    {mode === 'update' ? (
+                        <>
+                            <Box sx={{ display: 'flex', gap: 2 }}>
+                                <Autocomplete
+                                    sx={{ width: '50%' }}
+                                    options={scopeOptions}
+                                    getOptionLabel={(option) => option?.name || ''}
+                                    value={selectedScope}
+                                    onChange={(e, newValue) => {
+                                        setSelectedScope(newValue);
+                                        setSelectedIssue(null);
+                                        setSelectedType(null);
+                                        setIssueOptions([]);
+                                        setDetails('');
+                                        setSelectedStatus(null);
+                                    }}
+                                    renderInput={(params) => (
+                                        <TextField {...params} label="Scope" size="small" />
+                                    )}
+                                />
+                                <Autocomplete
+                                    sx={{ width: '50%' }}
+                                    options={issueOptions}
+                                    value={selectedIssue}
+                                    getOptionLabel={(option) =>
+                                        typeof option === 'string' ? option : option?.name || ''
+                                    }
+                                    isOptionEqualToValue={(option, value) =>
+                                        option?.name === value?.name
+                                    }
+                                    onChange={(e, newValue) => setSelectedIssue(newValue)}
+                                    renderInput={(params) => (
+                                        <TextField {...params} label="Issue" size="small" />
+                                    )}
+                                />
+                            </Box>
+
+                            <Autocomplete
+                                sx={{ width: '49%', mt: 2 }}
+                                options={typeOptions}
+                                value={selectedType}
+                                onChange={(e, newValue) => setSelectedType(newValue)}
+                                getOptionLabel={(option) => option?.name || ''}
+                                renderInput={(params) => (
+                                    <TextField {...params} label="Type" size="small" />
+                                )}
+                            />
+
+                            <TextField
+                                fullWidth
+                                multiline
+                                rows={8}
+                                sx={{ mt: 2 }}
+                                value={details}
+                                onChange={(e) => setDetails(e.target.value)}
+                                placeholder="Details"
+                            />
+
+                            <Button
+                                color="primary"
+                                variant="outlined"
+                                sx={{ width: '25%', mt: 2 }}
+                                onClick={async () => {
+                                    if (!selectedScope?.name || !selectedIssue?.name || !selectedType?.name) {
+                                        setPromptMessage('Please select Scope, Issue, and Type before updating.');
+                                        setPromptSeverity('warning');
+                                        setPromptOpen(true);
+                                        return;
+                                    }
+
+                                    try {
+                                        const docRef = doc(db, 'ScopeIssueDes', selectedScope.name, selectedIssue.name, 'Type');
+                                        await updateDoc(docRef, {
+                                            [selectedType.name]: details
+                                        });
+                                        setPromptMessage('Details updated successfully!');
+                                        setPromptSeverity('success');
+                                        setPromptOpen(true);
+                                    } catch (error) {
+                                        console.error('Error updating details:', error);
+                                        setPromptMessage('Failed to update details.');
+                                        setPromptSeverity('error');
+                                        setPromptOpen(true);
+                                    }
+                                }}
+                            >
+                                Update
+                            </Button>
+                        </>
+                    ) : (
+                        <>
+                            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mt: 2 }}>
+                                {isAddingScope ? (
+                                    <TextField
+                                        label="New Scope"
+                                        value={newScope}
+                                        onChange={(e) => setNewScope(e.target.value)}
+                                        fullWidth
+                                        size="small"
+                                    />
+                                ) : (
                                     <Autocomplete
-                                        sx={{ width: '49%' }}
-                                        options={typeOptions}
-                                        value={selectedType}
-                                        onChange={(e, newValue) => setSelectedType(newValue)}
+                                        sx={{ flex: 1 }}
+                                        options={scopeOptions}
                                         getOptionLabel={(option) => option?.name || ''}
-                                        renderInput={(params) => (
-                                            <TextField {...params} label="Type" size="small" />
-                                        )}
-                                    />
-                                    <Box display="flex" alignItems="start" gap={1}>
-                                        <TextField fullWidth multiline rows={8}
-                                            value={details}
-                                            onChange={(e) => setDetails(e.target.value)}
-                                            placeholder="Details" />
-
-                                    </Box>
-
-                                    <Button
-                                        color="primary"
-                                        variant="outlined"
-                                        sx={{ width: '25%' }}
-                                        onClick={async () => {
-                                            if (!selectedScope?.name || !selectedIssue?.name || !selectedType?.name) {
-                                                setPromptMessage('Please select Scope, Issue, and Type before updating.');
-                                                setPromptSeverity('warning');
-                                                setPromptOpen(true);
-                                                return;
-                                            }
-
-                                            try {
-                                                const docRef = doc(db, 'ScopeIssueDes', selectedScope.name, selectedIssue.name, 'Type');
-                                                await updateDoc(docRef, {
-                                                    [selectedType.name]: details
-                                                });
-                                                setPromptMessage('Details updated successfully!');
-                                                setPromptSeverity('success');
-                                                setPromptOpen(true);
-                                            } catch (error) {
-                                                console.error('Error updating details:', error);
-                                                setPromptMessage('Failed to update details.');
-                                                setPromptSeverity('error');
-                                                setPromptOpen(true);
-                                            }
+                                        value={selectedScope}
+                                        onChange={(e, newValue) => {
+                                            setSelectedScope(newValue);
+                                            setNewScope('');
+                                            setNewIssue('');
+                                            setSelectedIssue(null);
+                                            setDetails('');
                                         }}
-                                    >
-                                        Update
-                                    </Button>
-
-                                    <Prompt
-                                        open={promptOpen}
-                                        message={promptMessage}
-                                        severity={promptSeverity}
-                                        onClose={() => setPromptOpen(false)}
+                                        renderInput={(params) => <TextField {...params} label="Select Scope" size="small" />}
                                     />
+                                )}
+                                <Button
+  variant="outlined"
+  onClick={() => {
+    const switchingToAddNew = !isAddingScope;
 
-                                </Box>
-                            </TableCell>
-                        </TableRow>
-                    </TableBody>
+    setIsAddingScope(switchingToAddNew);
+    setNewScope('');
+    setSelectedScope(null);
+
+    if (switchingToAddNew) {
+      // Only force Issue to "add new" when Scope is switching to "add new"
+      setIsAddingIssue(true);
+      setNewIssue('');
+      setSelectedIssue(null);
+    }
+
+    setDetails('');
+  }}
+>
+  {isAddingScope ? 'Existing Scope' : 'Add New Scope'}
+</Button>
+
+                            </Box>
+
+                            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mt: 2 }}>
+                                {isAddingIssue ? (
+                                    <TextField
+                                        label="New Issue"
+                                        value={newIssue}
+                                        onChange={(e) => setNewIssue(e.target.value)}
+                                        fullWidth
+                                        size="small"
+                                    />
+                                ) : (
+                                    <Autocomplete
+                                        sx={{ flex: 1 }}
+                                        options={issueOptions}
+                                        getOptionLabel={(option) => option?.name || ''}
+                                        value={selectedIssue}
+                                        onChange={(e, newValue) => {
+                                            setSelectedIssue(newValue);
+                                            setNewIssue('');
+                                            setDetails('');
+                                        }}
+                                        renderInput={(params) => <TextField {...params} label="Select Issue" size="small" />}
+                                    />
+                                )}
+                               <Button
+  variant="outlined"
+  onClick={() => {
+    setIsAddingIssue(!isAddingIssue);
+    setNewIssue('');
+    setSelectedIssue(null);
+  }}
+  disabled={isAddingScope} // 🔒 Disable if Scope is in "Add New"
+>
+  {isAddingIssue ? 'Existing Issue' : 'Add New Issue'}
+</Button>
+
+                            </Box>
+
+                            <Autocomplete
+                                sx={{ width: '49%', mt: 2 }}
+                                options={typeOptions}
+                                value={selectedType}
+                                onChange={(e, newValue) => setSelectedType(newValue)}
+                                getOptionLabel={(option) => option?.name || ''}
+                                renderInput={(params) => (
+                                    <TextField {...params} label="Type" size="small" />
+                                )}
+                            />
+                            <TextField
+                                label="Details"
+                                multiline
+                                rows={8}
+                                fullWidth
+                                sx={{ mt: 2 }}
+                                value={details}
+                                onChange={(e) => setDetails(e.target.value)}
+                            />
+                            <Button
+                                color="primary"
+                                variant="outlined"
+                                sx={{ width: '25%', mt: 2 }}
+                                onClick={async () => {
+                                    const finalScope = isAddingScope ? newScope.trim() : selectedScope?.name;
+                                    const finalIssue = isAddingIssue ? newIssue.trim() : selectedIssue?.name;
+
+                                    if (!finalScope || !finalIssue || !selectedType?.name) {
+                                        setPromptMessage('Please fill in Scope, Issue, and Type before saving.');
+                                        setPromptSeverity('warning');
+                                        setPromptOpen(true);
+                                        return;
+                                    }
+
+                                    try {
+                                        // Optional: Save new scope to Scope collection (with auto-increment field name)
+                                        if (isAddingScope) {
+                                            const scopeDocRef = doc(db, 'Scope', 'lahQ4Tj4TpNZBCGxZ94F');
+                                            const scopeSnap = await getDoc(scopeDocRef);
+
+                                            if (scopeSnap.exists()) {
+                                                const scopeData = scopeSnap.data();
+                                                const scopeExists = Object.values(scopeData).some(
+                                                    val => val.toLowerCase() === finalScope.toLowerCase()
+                                                );
+
+                                                if (!scopeExists) {
+                                                    const keys = Object.keys(scopeData)
+                                                        .filter(key => key.startsWith('scope'))
+                                                        .map(key => parseInt(key.replace('scope', '')))
+                                                        .filter(n => !isNaN(n));
+                                                    const nextScopeIndex = keys.length > 0 ? Math.max(...keys) + 1 : 1;
+                                                    const newScopeKey = `scope${nextScopeIndex}`;
+                                                    await updateDoc(scopeDocRef, {
+                                                        [newScopeKey]: finalScope,
+                                                    });
+                                                }
+                                            }
+                                        }
+
+                                        // Save description under ScopeIssueDes/{finalScope}/{finalIssue}/Type
+                                        const docRef = doc(db, 'ScopeIssueDes', finalScope, finalIssue, 'Type');
+                                        await updateDoc(docRef, {
+                                            [selectedType.name]: details
+                                        });
+
+                                        setPromptMessage('New details saved successfully!');
+                                        setPromptSeverity('success');
+                                        setPromptOpen(true);
+
+                                        // Clear inputs
+                                        setNewScope('');
+                                        setNewIssue('');
+                                        setNewType('');
+                                        setSelectedScope(null);
+                                        setSelectedIssue(null);
+                                        setSelectedType(null);
+                                        setDetails('');
+                                    } catch (error) {
+                                        console.error('Error saving new details:', error);
+                                        setPromptMessage('Failed to save new details.');
+                                        setPromptSeverity('error');
+                                        setPromptOpen(true);
+                                    }
+                                }}
+
+                            >
+                                Save
+                            </Button>
+                        </>
+                    )}
+
+                    <Prompt
+                        open={promptOpen}
+                        message={promptMessage}
+                        severity={promptSeverity}
+                        onClose={() => setPromptOpen(false)}
+                    />
+
                 </Table>
             </Box>
         </Modal>

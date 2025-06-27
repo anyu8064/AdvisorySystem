@@ -76,6 +76,7 @@ export default function Header({ title, fontSize = '1.5rem' }) {
           date: formattedCreatedAt,
           daterange: formattedDateTimes,
           fullDetails: {
+            name: docData.name || null,
             scope: docData.scope || null,
             status: docData.status || null,
             issue: docData.issue || null,
@@ -151,7 +152,6 @@ export default function Header({ title, fontSize = '1.5rem' }) {
         console.error('Failed to fetch profile data:', error);
       }
     };
-
     if (currentUser?.email) {
       fetchUserData();
     }

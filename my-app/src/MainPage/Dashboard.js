@@ -4,6 +4,7 @@ import {
   Modal, IconButton, Autocomplete, Card, CardContent, Grid, Portal, Tooltip
 } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
+import { getAuth } from "firebase/auth";
 import Header from '../Header/Header';
 import { Add, Remove, Description } from "@mui/icons-material";
 import Prompt from '../components/prompt';
@@ -11,7 +12,7 @@ import Loading from '../components/Loading';
 import { useEffect } from 'react';
 import { db } from '../utils/firebase';
 import '../style.css';
-import { getDocs, doc, getDoc, collection, setDoc, addDoc, updateDoc } from "firebase/firestore";
+import { getDocs, doc, getDoc, collection, updateDoc, addDoc, query, where } from "firebase/firestore";
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import dayjs from 'dayjs';
@@ -30,7 +31,6 @@ import FormatUnderlinedIcon from '@mui/icons-material/FormatUnderlined';
 export default function Dashboard() {
   const { currentUser } = useAuth();
   const [prompt, setPrompt] = useState({ open: false, message: '', severity: 'warning' });
-  console.log(currentUser);
   const [unscheduled, setUnscheduled] = useState(false);
   const [durationText, setDurationText] = useState("");
   const [scopeOptions, setScopeOptions] = useState([]);
@@ -44,12 +44,15 @@ export default function Dashboard() {
   const [details, setDetails] = useState('');
   const [areas, setAreas] = useState('');
   const [openModal, setOpenModal] = useState(false);
+  const [openModal1, setOpenModal1] = useState(false);
   const [loading, setLoading] = useState(false);
   const [promptOpen, setPromptOpen] = useState(false);
   const [promptMessage, setPromptMessage] = useState('');
   const [promptSeverity, setPromptSeverity] = useState('warning');
-  const [selectedTemplate, setSelectedTemplate] = useState('Template 1');
+  const [selectedTemplate, setSelectedTemplate] = useState('Advisory');
   const [attachments, setAttachments] = useState([]);
+  const [whenDate, setWhenDate] = useState('');
+  const [whenText, setWhenText] = useState('');
 
   const handleSelect = (template) => {
     clear();
@@ -132,7 +135,6 @@ export default function Dashboard() {
     setLoading(true);
     try {
       const docRef = await saveForm();
-
       await document.fonts.ready;
       await new Promise(resolve => setTimeout(resolve, 300));
 
@@ -334,10 +336,39 @@ export default function Dashboard() {
   };
   const handleCopyImage = async () => {
     try {
-      // Style fixes for rendering
-      cardRef.current.style.backgroundColor = '#ffffff';
-      cardRef.current.style.boxShadow = 'none';
-      cardRef.current.style.overflow = 'visible';
+      if (cardRef.current) {
+        cardRef.current.style.backgroundColor = '#ffffff';
+        cardRef.current.style.boxShadow = 'none';
+        cardRef.current.style.overflow = 'visible';
+
+        const images = cardRef.current.querySelectorAll('img');
+        await Promise.all(
+          Array.from(images).map((img) =>
+            img.complete
+              ? Promise.resolve()
+              : new Promise((resolve) => {
+                img.onload = resolve;
+                img.onerror = resolve;
+              })
+          )
+        );
+
+        const attachmentImages = cardRef.current.querySelectorAll('img.attachment-img');
+        attachmentImages.forEach((img) => {
+          if (img.naturalWidth && img.naturalHeight) {
+            const maxHeight = 300;
+            const scale = Math.min(1, maxHeight / img.naturalHeight);
+            const newWidth = img.naturalWidth * scale;
+            const newHeight = img.naturalHeight * scale;
+
+            img.style.width = `${newWidth}px`;
+            img.style.height = `${newHeight}px`;
+            img.style.objectFit = 'contain'; // Ensure the aspect ratio is maintained
+          }
+        });
+      }
+
+      await new Promise((resolve) => requestAnimationFrame(resolve));
 
       const canvas = await html2canvas(cardRef.current, {
         backgroundColor: '#ffffff',
@@ -348,22 +379,22 @@ export default function Dashboard() {
       canvas.toBlob(async (blob) => {
         if (!blob) {
           setPromptMessage("Failed to copy image.");
-          setPromptSeverity('error');
+          setPromptSeverity("error");
           setPromptOpen(true);
           return;
         }
 
-        const clipboardItem = new ClipboardItem({ 'image/png': blob });
+        const clipboardItem = new ClipboardItem({ "image/png": blob });
         await navigator.clipboard.write([clipboardItem]);
 
         setPromptMessage("Image copied to clipboard!");
-        setPromptSeverity('success');
+        setPromptSeverity("success");
         setPromptOpen(true);
-      }, 'image/png');
+      }, "image/png");
     } catch (error) {
       console.error("Error copying image to clipboard:", error);
       setPromptMessage("Failed to copy image.");
-      setPromptSeverity('error');
+      setPromptSeverity("error");
       setPromptOpen(true);
     }
   };
@@ -617,39 +648,69 @@ export default function Dashboard() {
     console.log('Updated status:', optionStatus);
   }, [optionStatus]);
 
-  const saveForm = async () => {
-    const formattedDateTimes = dateTimes.map(entry => ({
+const saveForm = async () => {
+  const auth = getAuth();
+  const currentUser = auth.currentUser;
+
+  if (!currentUser) {
+    throw new Error("User not authenticated");
+  }
+
+  // Fetch user name
+  let userName = "------";
+  try {
+    const usersRef = collection(db, "users");
+    const q = query(usersRef, where("email", "==", currentUser.email));
+    const querySnapshot = await getDocs(q);
+    if (!querySnapshot.empty) {
+      const userData = querySnapshot.docs[0].data();
+      userName = userData.name || "------";
+    }
+  } catch (err) {
+    console.error("Error fetching user name:", err);
+  }
+
+  // Safely format dateTimes (skip if incomplete)
+  const formattedDateTimes = (dateTimes || [])
+    .filter(entry => entry?.start?.date && entry?.start?.time && entry?.end?.date && entry?.end?.time)
+    .map(entry => ({
       start: new Date(`${entry.start.date}T${entry.start.time}`),
       end: new Date(`${entry.end.date}T${entry.end.time}`)
     }));
 
-    const fallback = (value) => {
-      return value !== undefined && value !== null && value !== "" ? value : "------";
-    };
-
-    const formData = {
-      scope: fallback(selectedScope?.name),
-      status: fallback(selectedStatus?.id),
-      issue: fallback(selectedIssue?.name),
-      output: fallback(selectedIssue?.name), // same as issue
-      type: fallback(selectedType?.name),
-      dateTimes: dateTimes.length > 0 ? formattedDateTimes : "------",
-      unscheduled: fallback(unscheduled),
-      durationText: fallback(durationText),
-      areas: areas && areas.length ? areas : ["------"],
-      details: fallback(details),
-      createdAt: new Date()
-    };
-
-    try {
-      const savedDataRef = collection(db, "SavedData");
-      const docRef = await addDoc(savedDataRef, formData);
-      return docRef;
-    } catch (err) {
-      console.error("Error saving to Firestore:", err);
-      throw err;
-    }
+  const fallback = (value, alt = "------") => {
+    if (Array.isArray(value)) return value.length ? value : [alt];
+    return value !== undefined && value !== null && value !== "" ? value : alt;
   };
+
+  const formData = {
+    scope: fallback(selectedScope?.name),
+    status: fallback(selectedStatus?.id),
+    issue: fallback(selectedIssue?.name),
+    output: fallback(outputText || selectedIssue?.name), // outputText preferred if set
+    type: fallback(selectedType?.name),
+    dateTimes: formattedDateTimes.length > 0 ? formattedDateTimes : "------",
+    unscheduled: unscheduled ?? false,
+    durationText: fallback(durationText),
+    areas: fallback(Array.isArray(areas) ? areas : [areas]),
+    details: fallback(details),
+    createdAt: new Date(),
+    name: userName,
+    whenDate: fallback(whenDate),
+    whenText: fallback(whenText),
+     template: fallback(selectedTemplate),
+  };
+
+  try {
+    const savedDataRef = collection(db, "SavedData");
+    const docRef = await addDoc(savedDataRef, formData);
+    return docRef;
+  } catch (err) {
+    console.error("Error saving to Firestore:", err);
+    throw err;
+  }
+};
+
 
   useEffect(() => {
     console.log('Trigger:', { selectedType, selectedStatus, selectedIssue });
@@ -682,11 +743,14 @@ export default function Dashboard() {
     }
   }, [selectedType, selectedStatus, selectedIssue, isEdited]);
 
-  const handleBlur = (ref, setState) => {
-    setState(ref.current.innerHTML);
+  const handleBlur = (ref, setter) => {
+    if (ref.current) {
+      setter(ref.current.innerHTML); // not .innerText or .textContent
+    }
   };
 
- const clear = () => {
+const clear = () => {
+  setSelectedScope(null);
   setAreas('');
   setAttachments([]);
   setDateTimes([{ start: { date: '', time: '' }, end: { date: '', time: '' } }]);
@@ -694,14 +758,17 @@ export default function Dashboard() {
   setDurationText('');
   setOutputText('');
   setSelectedIssue(null);
-  setSelectedScope(null);
   setSelectedStatus(null);
   setSelectedType(null);
   setUnscheduled(false);
   setIssueOptions([]);
   setIsEdited(false);
+  setWhenText('');
+  setWhenDate('');
+  setAreas('');
+  setDetails('');
+   setSelectedScope(null);
 };
-
 
   useEffect(() => {
     if (areasRef.current) {
@@ -748,9 +815,9 @@ export default function Dashboard() {
           {/* Floating Template Buttons */}
           <Tooltip title="Advisory Template" placement="right" >
             <Button
-              variant={selectedTemplate === 'Template 1' ? 'outlined' : 'contained'}
+              variant={selectedTemplate === 'Advisory' ? 'outlined' : 'contained'}
               color="primary"
-              onClick={() => handleSelect('Template 1')}
+              onClick={() => handleSelect('Advisory')}
               sx={{
                 borderColor: "navy",
                 position: 'fixed',
@@ -769,9 +836,9 @@ export default function Dashboard() {
 
           <Tooltip title="Informational Template" placement="right">
             <Button
-              variant={selectedTemplate === 'Template 2' ? 'outlined' : 'contained'}
+              variant={selectedTemplate === 'Informational' ? 'outlined' : 'contained'}
               color="primary"
-              onClick={() => handleSelect('Template 2')}
+              onClick={() => handleSelect('Informational')}
               sx={{
                 borderColor: "navy",
                 position: 'fixed',
@@ -790,7 +857,7 @@ export default function Dashboard() {
 
           {/* Conditional Template Rendering */}
           <Box sx={{ ml: 10, mt: 2 }}>
-            {selectedTemplate === 'Template 1' ? (
+            {selectedTemplate === 'Advisory' && (
               <Table>
                 <TableBody>
                   {/* WHAT*/}
@@ -1024,25 +1091,45 @@ export default function Dashboard() {
 
                         {/* File List with Remove */}
                         {attachments?.map((file, index) => (
-                          <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Typography variant="body2" noWrap sx={{ flexGrow: 1 }}>
-                              📎 {file.name}
-                            </Typography>
-                            <IconButton
-                              color="error"
-                              size="small"
-                              onClick={() => {
-                                setAttachments(prev => prev.filter((_, i) => i !== index));
-                              }}
-                            >
-                              <Remove />
-                            </IconButton>
+                          <Box key={index} sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                            {/* Show preview if image */}
+                            {file.type.startsWith('image/') && (
+                              <img
+                                src={URL.createObjectURL(file)}
+                                className="attachment-img"
+                                alt={`attachment-${index}`}
+                                style={{
+                                  maxWidth: '100%', // Ensure the image does not exceed the width of its container
+                                  maxHeight: '300px', // Set a maximum height
+                                  objectFit: 'contain', // Maintain aspect ratio
+                                  borderRadius: '6px',
+                                  marginBottom: '4px',
+                                }}
+                              />
+                            )}
+
+
+                            {/* File name + Remove */}
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Typography variant="body2" noWrap sx={{ flexGrow: 1 }}>
+                                📎 {file.name}
+                              </Typography>
+                              <IconButton
+                                color="error"
+                                size="small"
+                                onClick={() => {
+                                  setAttachments(prev => prev.filter((_, i) => i !== index));
+                                }}
+                              >
+                                <Remove />
+                              </IconButton>
+                            </Box>
                           </Box>
                         ))}
                       </Box>
+
                     </TableCell>
                   </TableRow>
-
 
                   {/* AREAS AFFECTED */}
                   <TableRow>
@@ -1058,6 +1145,28 @@ export default function Dashboard() {
                           contentEditable
                           suppressContentEditableWarning
                           onBlur={() => handleBlur(areasRef, setAreas)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Tab') {
+                              e.preventDefault(); // prevent tab from moving focus
+
+                              // Create 4 spaces or &nbsp; x 4 (Word-style indent)
+                              const tabSpaces = '\u00A0\u00A0\u00A0\u00A0'; // 4 non-breaking spaces
+
+                              // Insert at caret position
+                              const selection = window.getSelection();
+                              if (selection && selection.rangeCount > 0) {
+                                const range = selection.getRangeAt(0);
+                                const spaceNode = document.createTextNode(tabSpaces);
+                                range.insertNode(spaceNode);
+
+                                // Move cursor after inserted spaces
+                                range.setStartAfter(spaceNode);
+                                range.setEndAfter(spaceNode);
+                                selection.removeAllRanges();
+                                selection.addRange(range);
+                              }
+                            }
+                          }}
                           sx={{
                             whiteSpace: 'pre-wrap',
                             fontFamily: 'sans-serif',
@@ -1069,6 +1178,7 @@ export default function Dashboard() {
                             overflowY: 'auto'
                           }}
                         />
+
                         <Box display="flex" flexDirection="column">
                           <IconButton onClick={() => applyStyle(areasRef, 'bold')}>
                             <FormatBoldIcon />
@@ -1097,6 +1207,26 @@ export default function Dashboard() {
                           contentEditable
                           suppressContentEditableWarning
                           onBlur={() => handleBlur(detailsRef, setDetails)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Tab') {
+                              e.preventDefault(); // prevent default focus shift
+
+                              const tabSpaces = '\u00A0\u00A0\u00A0\u00A0'; // 4 non-breaking spaces
+
+                              const selection = window.getSelection();
+                              if (selection && selection.rangeCount > 0) {
+                                const range = selection.getRangeAt(0);
+                                const spaceNode = document.createTextNode(tabSpaces);
+                                range.insertNode(spaceNode);
+
+                                // Move cursor after inserted spaces
+                                range.setStartAfter(spaceNode);
+                                range.setEndAfter(spaceNode);
+                                selection.removeAllRanges();
+                                selection.addRange(range);
+                              }
+                            }
+                          }}
                           sx={{
                             whiteSpace: 'pre-wrap',
                             fontFamily: 'sans-serif',
@@ -1106,9 +1236,9 @@ export default function Dashboard() {
                             width: '100%',
                             minHeight: '200px',
                             overflowY: 'auto',
-
                           }}
                         />
+
                         <Box display="flex" flexDirection="column">
                           <IconButton onClick={() => applyStyle(detailsRef, 'bold')}>
                             <FormatBoldIcon />
@@ -1157,7 +1287,9 @@ export default function Dashboard() {
                   </TableRow>
                 </TableBody>
               </Table>
-            ) : (
+               )}
+
+           {selectedTemplate === 'Informational'  && (
               <Table>
                 <TableBody>
                   {/* WHAT*/}
@@ -1255,13 +1387,91 @@ export default function Dashboard() {
                     </TableCell>
                     <TableCell>
                       <TextField
-                        type="date"
-                        fullWidth
+                        label="Description"
                         size="small"
+                        sx={{ width: '49%', mr: 1 }}
+                        value={whenText}
+                        onChange={(e) => setWhenText(e.target.value)}
+                      />
+                      <TextField
+                        type="date"
+                        size="small"
+                        sx={{ width: '49%' }}
+                        value={whenDate}
+                        onChange={(e) => setWhenDate(e.target.value)}
                         InputLabelProps={{ shrink: true }}
                       />
                     </TableCell>
                   </TableRow>
+                  <TableRow>
+                    <TableCell>
+                      <Typography fontWeight="bold" sx={{ textAlign: 'center' }}>
+                        ATTACHMENT
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                        {/* Upload Button */}
+                        <Button variant="outlined" component="label" sx={{ alignSelf: 'flex-start' }}>
+                          Upload File
+                          <input
+                            type="file"
+                            hidden
+                            multiple
+                            onChange={(e) => {
+                              const files = Array.from(e.target.files);
+                              setAttachments(prev => [...prev, ...files]); // Append new files
+                            }}
+                          />
+                        </Button>
+
+                        {/* File List with Remove and Image Preview */}
+                        {attachments?.map((file, index) => (
+                          <Box key={index} sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Typography variant="body2" noWrap sx={{ flexGrow: 1 }}>
+                                📎 {file.name}
+                              </Typography>
+                              <IconButton
+                                color="error"
+                                size="small"
+                                onClick={() => {
+                                  setAttachments(prev => prev.filter((_, i) => i !== index));
+                                }}
+                              >
+                                <Remove />
+                              </IconButton>
+                            </Box>
+
+                            {/* Image Preview (if image file) */}
+                            {file.type.startsWith('image/') && (
+                              <Box
+                                key={index}
+                                component="img"
+                                src={URL.createObjectURL(file)}
+                                alt={`attachment-${index}`}
+                                sx={{
+                                  maxWidth: 'auto',
+                                  height: 'auto',
+                                  display: 'block',
+                                  objectFit: 'contain',
+                                  borderRadius: 1,
+                                  mb: 1,
+                                }}
+                                style={{
+                                  maxWidth: '100%',
+                                  height: 'auto',
+                                  objectFit: 'contain',
+                                }}
+                              />
+
+                            )}
+                          </Box>
+                        ))}
+                      </Box>
+                    </TableCell>
+                  </TableRow>
+
 
                   {/* AREAS AFFECTED */}
                   <TableRow>
@@ -1277,6 +1487,28 @@ export default function Dashboard() {
                           contentEditable
                           suppressContentEditableWarning
                           onBlur={() => handleBlur(areasRef, setAreas)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Tab') {
+                              e.preventDefault(); // prevent tab from moving focus
+
+                              // Create 4 spaces or &nbsp; x 4 (Word-style indent)
+                              const tabSpaces = '\u00A0\u00A0\u00A0\u00A0'; // 4 non-breaking spaces
+
+                              // Insert at caret position
+                              const selection = window.getSelection();
+                              if (selection && selection.rangeCount > 0) {
+                                const range = selection.getRangeAt(0);
+                                const spaceNode = document.createTextNode(tabSpaces);
+                                range.insertNode(spaceNode);
+
+                                // Move cursor after inserted spaces
+                                range.setStartAfter(spaceNode);
+                                range.setEndAfter(spaceNode);
+                                selection.removeAllRanges();
+                                selection.addRange(range);
+                              }
+                            }
+                          }}
                           sx={{
                             whiteSpace: 'pre-wrap',
                             fontFamily: 'sans-serif',
@@ -1316,6 +1548,26 @@ export default function Dashboard() {
                           contentEditable
                           suppressContentEditableWarning
                           onBlur={() => handleBlur(detailsRef, setDetails)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Tab') {
+                              e.preventDefault(); // prevent default focus shift
+
+                              const tabSpaces = '\u00A0\u00A0\u00A0\u00A0'; // 4 non-breaking spaces
+
+                              const selection = window.getSelection();
+                              if (selection && selection.rangeCount > 0) {
+                                const range = selection.getRangeAt(0);
+                                const spaceNode = document.createTextNode(tabSpaces);
+                                range.insertNode(spaceNode);
+
+                                // Move cursor after inserted spaces
+                                range.setStartAfter(spaceNode);
+                                range.setEndAfter(spaceNode);
+                                selection.removeAllRanges();
+                                selection.addRange(range);
+                              }
+                            }
+                          }}
                           sx={{
                             whiteSpace: 'pre-wrap',
                             fontFamily: 'sans-serif',
@@ -1325,9 +1577,9 @@ export default function Dashboard() {
                             width: '100%',
                             minHeight: '200px',
                             overflowY: 'auto',
-
                           }}
                         />
+
                         <Box display="flex" flexDirection="column">
                           <IconButton onClick={() => applyStyle(detailsRef, 'bold')}>
                             <FormatBoldIcon />
@@ -1353,21 +1605,7 @@ export default function Dashboard() {
                         variant="contained"
                         color="primary"
                         onClick={() => {
-                          if (!isIssueComplete()) {
-                            setPromptMessage('Please select Issue.');
-                            setPromptSeverity('warning');
-                            setPromptOpen(true);
-                          } else if (!isTypeComplete()) {
-                            setPromptMessage('Please select Type.');
-                            setPromptSeverity('warning');
-                            setPromptOpen(true);
-                          } else if (!isDateTimeComplete()) {
-                            setPromptMessage('Please fill in all start and end date/time fields.');
-                            setPromptSeverity('warning');
-                            setPromptOpen(true);
-                          } else {
-                            setOpenModal(true);
-                          }
+                          setOpenModal1(true);
                         }}
                       >
                         PREVIEW
@@ -1604,7 +1842,7 @@ export default function Dashboard() {
                             src={URL.createObjectURL(file)}
                             alt={`attachment-${index}`}
                             sx={{
-                              width: '100%',
+                              width: 'auto',
                               maxHeight: 300,
                               objectFit: 'contain',
                               borderRadius: 1,
@@ -1637,6 +1875,237 @@ export default function Dashboard() {
               <Typography variant="caption" sx={{ display: 'block', fontFamily: 'Segoe UI', fontWeight: 500 }}>
                 Should you have any other concern,<br />
                 please call our IT Service Desk at local 2103
+              </Typography>
+            </Box>
+
+          </Card>
+        </Box>
+      </Modal>
+      <Modal open={openModal1} onClose={() => setOpenModal1(false)}>
+        <Box
+          sx={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            width: '100%',
+            maxWidth: 800,
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            bgcolor: 'background.paper',
+            boxShadow: 24,
+            p: 4,
+            borderRadius: 2,
+            overflowX: 'hidden',
+          }}
+        >
+          <Portal>
+            <Loading open={loading} />
+          </Portal>
+          <Box sx={{ mb: 2, display: 'flex', justifyContent: 'center', gap: 4 }}>
+
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <Typography sx={{ fontWeight: 'bold' }}>Copy Image</Typography>
+              <IconButton
+                onClick={handleCopyImage}
+                size="large"
+              >
+                <ContentCopyIcon sx={{ fontSize: 30, color: 'black' }} />
+              </IconButton>
+            </Box>
+
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <Typography sx={{ fontWeight: 'bold' }}>Generate Image</Typography>
+              <IconButton
+                color="primary"
+                onClick={handleGenerateImage}
+                size="large"
+              >
+                <ImageIcon sx={{ fontSize: 30 }} />
+              </IconButton>
+            </Box>
+
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <Typography sx={{ fontWeight: 'bold' }} >Generate PDF</Typography>
+              <IconButton
+
+                onClick={handleGeneratePDF}
+                size="large"
+              >
+                <PictureAsPdfIcon sx={{ fontSize: 30, color: 'red' }} />
+              </IconButton>
+            </Box>
+
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <Typography sx={{ fontWeight: 'bold' }}>Generate Word</Typography>
+              <IconButton disabled
+                color="primary"
+                onClick={handleGenerateWord}
+                size="large"
+              >
+                <DescriptionIcon sx={{ fontSize: 30 }} />
+              </IconButton>
+            </Box>
+          </Box>
+
+          {/* IT Advisory Card */}
+          <Card ref={cardRef} sx={{ width: 800 }}>
+
+            <Box >
+              <Box sx={{ position: 'relative', width: '100%', maxWidth: '800px', alignContent: 'center', }}>
+                {/* Image */}
+                <Box
+                  sx={{
+                    padding: 1,
+                    width: '100%',
+                    height: '65px', // You can adjust height as needed
+                    backgroundColor: '#1976d2', // Light blue
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                />
+
+                <Typography
+                  variant="caption"
+                  sx={{
+                    fontSize: '35px',
+                    position: 'absolute',
+                    top: '38%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    color: 'white',
+                    zIndex: 1
+                  }}
+                >
+                  IT Advisory
+                </Typography>
+
+
+              </Box>
+            </Box>
+
+            <CardContent>
+              <Box sx={{
+                border: '2px solid',
+                borderColor: 'black',
+                mt: 1,
+                mb: 0,
+                ml: 2,
+                mr: 2,
+                textAlign: 'center',
+              }}>
+                <Grid container spacing={0} sx={{ color: 'black' }} >
+
+                  {/* What - Full Row */}
+                  <Grid item sx={{ borderBottom: '2px solid', borderColor: 'black', p: 1, width: '100%', display: 'flex', alignItems: 'center' }}>
+                    <Typography variant="subtitle2" className="title" sx={{ fontWeight: 'bold', mr: 1, color: '#1976d2' }}>
+                      What:
+                    </Typography>
+                    <Typography variant="subtitle2" className="content">
+                      {outputText || '-- -- --'}
+                    </Typography>
+                  </Grid>
+
+                  <Grid item sx={{ borderBottom: '2px solid', borderColor: 'black', p: 1, width: '100%', display: 'flex', alignItems: 'center' }}>
+                    <Typography variant="subtitle2" className="title" sx={{ fontWeight: 'bold', mr: 1, color: '#1976d2' }}>
+                      When:
+                    </Typography>
+                    <Typography variant="subtitle2" className="content">
+                      {whenText && whenDate
+                        ? `${whenText} (${new Date(whenDate).toLocaleDateString('en-US', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric',
+                        })})`
+                        : '-- -- --'}
+                    </Typography>
+                  </Grid>
+
+                  {/* Areas Affected - Full Row */}
+                  <Grid
+                    item
+                    sx={{
+                  
+                      p: 1,
+                      width: '100%',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'flex-start',
+                    }}
+                  >
+                    <Typography
+                      variant="subtitle2"
+                      className="title"
+                      sx={{ fontWeight: 'bold', color: '#1976d2' }}
+                    >
+                      Areas Affected:
+                    </Typography>
+
+                    <Typography
+
+                      variant="subtitle2"
+                      className="content"
+                      sx={{ color: 'black', mt: 0.5, textAlign: 'Left' }}
+                      dangerouslySetInnerHTML={{
+                        __html: areas && areas.trim() !== '' ? areas : '-- -- --'
+                      }}
+                    />
+                  </Grid>
+                  {/* Details - Full Row */}
+                  <Grid sx={{ borderTop: '2px solid', borderColor: 'black', p: 1, width: '100%' }}>
+                   
+                    <Typography
+                      variant="subtitle2"
+                      className="content"
+                      sx={{ whiteSpace: 'pre-wrap', textAlign: 'Left', p: 1, mb: 1 }}
+                      dangerouslySetInnerHTML={{ __html: details && details.trim() !== '' ? details : '-- -- --' }}
+                    />
+                  </Grid>
+                  {attachments?.length > 0 && (
+                    <Grid item sx={{ p: 1, width: '100%' }}>
+                      {attachments.map((file, index) =>
+                        file.type.startsWith('image/') ? (
+                          <Box
+                            key={index}
+                            component="img"
+                            src={URL.createObjectURL(file)}
+                            alt={`attachment-${index}`}
+                            sx={{
+                              width: 'auto',
+                              maxHeight: 300,
+                              objectFit: 'contain',
+                              borderRadius: 1,
+                              mb: 1,
+                            }}
+                          />
+                        ) : (
+                          <Typography key={index} variant="body2" sx={{ p: 1 }}>
+                            📎 {file.name}
+                          </Typography>
+                        )
+                      )}
+                    </Grid>
+                  )}
+                </Grid>
+              </Box>
+
+            </CardContent>
+            <Box
+              sx={{
+                mt: 2,
+
+                backgroundColor: '#1976d2',
+                color: 'white',
+                textAlign: 'center',
+                width: '100%', // Take full width of parent
+                height: '0',
+
+                py: 2, // Padding for vertical spacing (instead of fixed height)
+              }}
+            >
+              <Typography variant="caption" sx={{ display: 'block', fontFamily: 'Segoe UI', fontWeight: 500 }}>
+                Should you have any other concern, please call our IT Service Desk at local 2103
               </Typography>
             </Box>
 
